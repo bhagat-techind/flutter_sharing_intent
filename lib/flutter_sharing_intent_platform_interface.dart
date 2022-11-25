@@ -9,7 +9,8 @@ abstract class FlutterSharingIntentPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static FlutterSharingIntentPlatform _instance = MethodChannelFlutterSharingIntent();
+  static FlutterSharingIntentPlatform _instance =
+      MethodChannelFlutterSharingIntent();
 
   /// The default instance of [FlutterSharingIntentPlatform] to use.
   ///
