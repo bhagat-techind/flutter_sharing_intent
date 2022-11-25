@@ -4,6 +4,27 @@ A flutter plugin that allow flutter apps to receive photos, videos, text, urls o
 
 ### Also, iOS is not developed yet.
 
+## Features
+
+- It's allow to share image, text, video ,urls and file from other app to flutter app. 
+- It's allow to share multiple image, multiple video and multiple file from other app to flutter app.
+ 
+## Installing
+
+command:
+
+```dart
+ $ flutter pub add flutter_sharing_intent
+```
+
+pubspec.yaml:
+
+```dart
+dependencies:
+flutter_sharing_intent: ^(latest)
+```
+
+## Usage
 
 ## Full Example
 
