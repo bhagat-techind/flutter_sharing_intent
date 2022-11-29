@@ -47,5 +47,19 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+    <key>CFBundleURLTypes</key>
+        <array>
+            <dict>
+                <key>CFBundleTypeRole</key>
+                <string>Editor</string>
+                <key>CFBundleURLSchemes</key>
+                <array>
+                    <string>SharingMedia</string>
+                </array>
+            </dict>
+        </array>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>To share photos, please allow permission to access your photo library.</string>
+    
 </dict>
 </plist>

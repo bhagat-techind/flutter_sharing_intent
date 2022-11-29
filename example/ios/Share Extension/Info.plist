@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+            <key>PHSupportedMediaTypes</key>
+              <array>
+                   <!-- To share video into your app-->
+                  <string>Video</string>
+                  <!-- To share images into your app-->
+                  <string>Image</string>
+              </array>
+                          
+			<key>NSExtensionActivationRule</key>
+            <dict>
+                <!-- To share text into your app -->
+                <key>NSExtensionActivationSupportsText</key>
+                <true/>
+                <!-- TO share urls into your app -->
+                <key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+                <integer>1</integer>
+                <!-- To share images into your app -->
+                <key>NSExtensionActivationSupportsImageWithMaxCount</key>
+                <integer>20</integer>
+                <!-- To share video into your app -->
+                <key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+                <integer>10</integer>
+                <!-- To share other files into your app -->
+                <key>NSExtensionActivationSupportsFileWithMaxCount</key>
+                <integer>10</integer>
+            </dict>
+		</dict>
+		<key>NSExtensionMainStoryboard</key>
+		<string>MainInterface</string>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.share-services</string>
+	</dict>
+</dict>
+</plist>
