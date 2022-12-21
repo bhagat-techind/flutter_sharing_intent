@@ -521,8 +521,6 @@ enum SharingFileType: Int, Codable {
 
 * Go to the Capabilities tab and switch on the App Groups switch for both targets.
 * Add a new group and name it as you want. For example `group.YOUR_HOST_APP_BUNDLE_IDENTIFIER` in my case `group.com.techind.flutterSharingIntentExample`
-* Add User-defined(`Build Settings -> +`) string `CUSTOM_GROUP_ID` in *BOTH* Targets: `Runner` and `Share Extension` and set value to group id created above.
-
 
 #### 4. Add following code in your host app AppDelegate file
 ios/Runner/AppDelegate.swift
