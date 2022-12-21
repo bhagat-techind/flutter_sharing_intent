@@ -268,9 +268,11 @@ class ShareViewController: UIViewController {
                         ex = "MP4"
                     case .file:
                         ex = "TXT"
-                case .text:
-                    ex = "TXT"
-                }
+                    case .text:
+                        ex = "TXT"
+                    case .url:
+                        ex = "TXT"
+                    }
             }
             return ex ?? "Unknown"
         }

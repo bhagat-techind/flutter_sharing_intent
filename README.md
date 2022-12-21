@@ -370,9 +370,11 @@ class ShareViewController: UIViewController {
                         ex = "MP4"
                     case .file:
                         ex = "TXT"
-                case .text:
-                    ex = "TXT"
-                }
+                    case .text:
+                        ex = "TXT"
+                    case .url:
+                        ex = "TXT"
+                    }
             }
             return ex ?? "Unknown"
         }
@@ -469,6 +471,51 @@ extension NSItemProvider {
     }
 }
 ```
+
+
+Add SharingFile.swift in ios/Share Extension
+```swift
+import Foundation
+
+class SharingFile: Codable {
+    var value: String;
+    var thumbnail: String?; // video thumbnail
+    var duration: Double?; // video duration in milliseconds
+    var type: SharingFileType;
+    
+    
+    init(value: String, thumbnail: String?, duration: Double?, type: SharingFileType) {
+        self.value = value
+        self.thumbnail = thumbnail
+        self.duration = duration
+        self.type = type
+    }
+    
+    // toString method to print out SharingFile details in the console
+    func toString() {
+        print("[SharingFile] \n\tvalue: \(self.value)\n\tthumbnail: \(self.thumbnail ?? "--" )\n\tduration: \(self.duration ?? 0)\n\ttype: \(self.type)")
+    }
+    
+    func toData(data: [SharingFile]) -> Data {
+        let encodedData = try? JSONEncoder().encode(data)
+        return encodedData!
+    }
+}
+```
+
+Add SharingFileType.swift in ios/Share Extension
+```swift
+
+enum SharingFileType: Int, Codable {
+    case text
+    case url
+    case image
+    case video
+    case file
+}
+
+```
+
 
 #### 3. Add Runner and Share Extension in the same group
 
