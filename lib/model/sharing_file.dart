@@ -14,7 +14,11 @@ class SharedFile {
   /// Whether its a video or image or file
   final SharedMediaType type;
 
-  SharedFile({required this.value, this.thumbnail, this.duration, this.type = SharedMediaType.FILE});
+  SharedFile(
+      {required this.value,
+      this.thumbnail,
+      this.duration,
+      this.type = SharedMediaType.FILE});
 
   SharedFile.fromJson(Map<String, dynamic> json)
       : value = json['value'],
@@ -28,4 +32,4 @@ class SharedFile {
   }
 }
 
-enum SharedMediaType { TEXT, IMAGE, VIDEO, FILE, URL}
+enum SharedMediaType { TEXT, IMAGE, VIDEO, FILE, URL }

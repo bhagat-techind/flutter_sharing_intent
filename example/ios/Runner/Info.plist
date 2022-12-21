@@ -54,7 +54,7 @@
                 <string>Editor</string>
                 <key>CFBundleURLSchemes</key>
                 <array>
-                    <string>SharingMedia</string>
+                    <string>SharingMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
                 </array>
             </dict>
         </array>

@@ -28,7 +28,7 @@ class _MyAppState extends State<MyApp> {
           });
       print("Shared: getMediaStream ${value.map((f) => f.value).join(",")}");
     }, onError: (err) {
-      print("getIntentDataStream error: $err");
+      print("Shared: getIntentDataStream error: $err");
     });
 
     // For sharing images coming from outside the app while the app is closed

@@ -1,4 +1,5 @@
 import UIKit
+import flutter_sharing_intent
 import Flutter
 
 @UIApplicationMain
@@ -7,7 +8,24 @@ import Flutter
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
+      GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
+    // If the application is using multiple libraries, which needs to implement this function here in AppDelegate, you should check if the url is made from SwiftReceiveSharingIntentPlugin (if so, return the sharingIntent response) or call the handler of specific librabry
+    override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+        print("AppDelegate ==>> calling application ==>> \(url)")
+        let sharingIntent = SwiftFlutterSharingIntentPlugin.instance
+        if sharingIntent.hasSameSchemePrefix(url: url) {
+            return sharingIntent.application(app, open: url, options: options)
+        }
+        
+         // For example load MSALPublicClientApplication
+         // return MSALPublicClientApplication.handleMSALResponse(url, sourceApplication: options[.sourceApplication] as? String)
+
+         // Cancel url handling
+         // return false
+
+         // Proceed url handling for other Flutter libraries like uni_links
+         return super.application(app, open: url, options:options)
+    }
 }

@@ -20,8 +20,8 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
     
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "flutter_sharing_intent",binaryMessenger:registrar.messenger())
-    let instance = SwiftFlutterSharingIntentPlugin()
+            let channel = FlutterMethodChannel(name: "flutter_sharing_intent",binaryMessenger:registrar.messenger())
+   
             registrar.addMethodCallDelegate(instance, channel: channel)
             
             let chargingChannelMedia = FlutterEventChannel(name: kEventsChannelMedia, binaryMessenger: registrar.messenger())
@@ -57,6 +57,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     // By Adding bundle id to prefix, we will ensure that the correct app will be openned
     public func hasSameSchemePrefix(url: URL?) -> Bool {
         if let url = url, let appDomain = Bundle.main.bundleIdentifier {
+//            print("hasSameSchemePrefix ==>> url : \(url), appDomain : \(appDomain) , \(url.absoluteString.hasPrefix("\(self.customSchemePrefix)-\(appDomain)"))")
             return url.absoluteString.hasPrefix("\(self.customSchemePrefix)-\(appDomain)")
         }
         return false
@@ -118,16 +119,16 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     }
     
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
-        print("handleUrl \(String(describing: url))")
         if let url = url {
             let appDomain = Bundle.main.bundleIdentifier!
             let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
-            print("handleUrl appDomain \(String(describing: appDomain))")
+
             let userDefaults = UserDefaults(suiteName: appGroupId)
             if url.fragment == "media" {
                 if let key = url.host?.components(separatedBy: "=").last,
                     let json = userDefaults?.object(forKey: key) as? Data {
                     let sharedArray = decode(data: json)
+                    
                     let sharedMediaFiles: [SharingFile] = sharedArray.compactMap {
                         guard let value = getAbsolutePath(for: $0.value) else {
                             return nil
