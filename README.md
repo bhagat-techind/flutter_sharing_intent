@@ -528,6 +528,7 @@ enum SharingFileType: Int, Codable {
 ios/Runner/AppDelegate.swift
 
 ```swift
+    import flutter_sharing_intent
     ....   
     override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
 
