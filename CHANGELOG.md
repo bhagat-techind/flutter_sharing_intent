@@ -1,3 +1,4 @@
-## 1.0.3
+## 1.0.4
 
-* Minor update
+* Fixed url sharing in iOS
+* Update README.md

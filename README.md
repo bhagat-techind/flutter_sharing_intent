@@ -106,6 +106,8 @@ ios/Share Extension/info.plist
 ios/Share Extension/ShareViewController.swift
 
 * Look at `loadIds()` for configure and details
+* hostAppBundleIdentifier will be your host app bundle identifier. For example in my case `com.techind.flutterSharingIntentExample`
+
 ```swift
 import UIKit
 import Social

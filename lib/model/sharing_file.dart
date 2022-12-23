@@ -3,22 +3,22 @@
 class SharedFile {
   /// Image or Video path or text
   /// NOTE. for iOS only the file is always copied
-  final String value;
+  String? value;
 
   /// Video thumbnail
-  final String? thumbnail;
+   String? thumbnail;
 
   /// Video duration in milliseconds
-  final int? duration;
+   int? duration;
 
   /// Whether its a video or image or file
-  final SharedMediaType type;
+   SharedMediaType type = SharedMediaType.OTHER;
 
   SharedFile(
       {required this.value,
       this.thumbnail,
       this.duration,
-      this.type = SharedMediaType.FILE});
+      this.type = SharedMediaType.OTHER});
 
   SharedFile.fromJson(Map<String, dynamic> json)
       : value = json['value'],
@@ -32,4 +32,4 @@ class SharedFile {
   }
 }
 
-enum SharedMediaType { TEXT, IMAGE, VIDEO, FILE, URL }
+enum SharedMediaType { TEXT, URL, IMAGE, VIDEO, FILE, OTHER }

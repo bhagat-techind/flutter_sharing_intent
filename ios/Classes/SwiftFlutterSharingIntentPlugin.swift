@@ -164,6 +164,15 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
                     }
                     eventSinkMedia?(toJson(data: latestSharing))
                 }
+            } else if url.fragment == "url" {
+                if let key = url.host?.components(separatedBy: "=").last,
+                    let sharedArray = userDefaults?.object(forKey: key) as? [String] {
+                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type:  SharingFileType.url)]
+                    if(setInitialData) {
+                        initialSharing = latestSharing
+                    }
+                    eventSinkMedia?(toJson(data: latestSharing))
+                }
             } else if url.fragment == "text" {
                 if let key = url.host?.components(separatedBy: "=").last,
                     let sharedArray = userDefaults?.object(forKey: key) as? [String] {
