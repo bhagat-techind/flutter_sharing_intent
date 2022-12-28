@@ -1,4 +1,3 @@
-## 1.0.4
+## 1.0.5
 
-* Fixed url sharing in iOS
-* Update README.md
+* Fixed return incorrect type in android
