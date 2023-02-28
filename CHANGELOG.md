@@ -1,3 +1,3 @@
-## 1.0.5
+## 1.0.6
 
-* Fixed return incorrect type in android
+* Cleaned cache on successfully fetched data #5

@@ -66,7 +66,12 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
     when (call.method) {
-      "getInitialSharing" -> result.success(initialSharing?.toString())
+      "getInitialSharing" -> {
+         result.success(initialSharing?.toString())
+          /// Clear cache data to send only once
+          initialSharing = null
+          latestSharing = null
+      }
       "reset" -> {
         initialSharing = null
         latestSharing = null

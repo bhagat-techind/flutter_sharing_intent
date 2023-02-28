@@ -41,6 +41,9 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
         switch call.method {
         case "getInitialSharing":
             result(toJson(data: self.initialSharing));
+             /// Clear cache data to send only once
+            self.initialSharing = nil
+            self.latestSharing = nil
 
         case "reset":
             self.initialSharing = nil
