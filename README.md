@@ -24,6 +24,10 @@ flutter_sharing_intent: ^(latest)
 ```
 
 ## Usage
+We are using following methods :- 
+* getMediaStream() * => Sets up a broadcast stream for receiving incoming media share change events. 
+* getInitialSharing() * => To get sharing data when app is start.
+* reset() * => To clear all sharing data 
 
 ### Android
  No External setup required

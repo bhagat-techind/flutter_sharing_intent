@@ -6,13 +6,13 @@ class SharedFile {
   String? value;
 
   /// Video thumbnail
-   String? thumbnail;
+  String? thumbnail;
 
   /// Video duration in milliseconds
-   int? duration;
+  int? duration;
 
   /// Whether its a video or image or file
-   SharedMediaType type = SharedMediaType.OTHER;
+  SharedMediaType type = SharedMediaType.OTHER;
 
   SharedFile(
       {required this.value,

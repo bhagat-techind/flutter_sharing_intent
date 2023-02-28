@@ -8,6 +8,7 @@ import android.media.ThumbnailUtils
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
+import android.webkit.URLUtil
 import androidx.annotation.NonNull
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -65,7 +66,12 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
     when (call.method) {
-      "getInitialSharing" -> result.success(initialSharing?.toString())
+      "getInitialSharing" -> {
+         result.success(initialSharing?.toString())
+          /// Clear cache data to send only once
+          initialSharing = null
+          latestSharing = null
+      }
       "reset" -> {
         initialSharing = null
         latestSharing = null
@@ -80,7 +86,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   }
 
   private fun handleIntent(intent: Intent, initial: Boolean) {
-    Log.w(TAG,"handleIntent ==>> ${intent.action}")
+    Log.w(TAG,"handleIntent ==>> ${intent.action}, ${intent.type}")
     when {
       (intent.type?.startsWith("text") != true)
               && (intent.action == Intent.ACTION_SEND
@@ -165,7 +171,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
       Intent.ACTION_SEND -> {
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)
         if (text != null) {
-          val type = MediaType.TEXT.ordinal
+          val type = getTypeForTextAndUrl(text)
           JSONArray().put(
             JSONObject()
               .put("value", text)
@@ -179,7 +185,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
         val value = textList?.mapNotNull { text ->
           val path = text
             ?: return@mapNotNull null
-          val type = MediaType.TEXT.ordinal
+          val type = getTypeForTextAndUrl(path)
 
           return@mapNotNull JSONObject()
             .put("value", path)
@@ -189,6 +195,13 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
       }
       else -> null
     }
+  }
+
+  // To get type for text and url only
+  // It will return MediaType.URL.ordinal if text is valid url other will return MediaType.TEXT.ordinal
+  fun getTypeForTextAndUrl( value: String?) : Int
+  {
+    return if (value == null || !URLUtil.isValidUrl(value)) MediaType.TEXT.ordinal else MediaType.URL.ordinal;
   }
 
   private fun getMediaType(path: String?): MediaType {
@@ -226,7 +239,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   }
 
   enum class MediaType {
-    TEXT, IMAGE, VIDEO, FILE, URL;
+    TEXT, URL, IMAGE, VIDEO, FILE ;
   }
 
   override fun onNewIntent(intent: Intent): Boolean {

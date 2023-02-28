@@ -1,4 +1,3 @@
-## 1.0.4
+## 1.0.6
 
-* Fixed url sharing in iOS
-* Update README.md
+* Cleaned cache on successfully fetched data #5
