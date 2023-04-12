@@ -2,12 +2,11 @@
 
 A flutter plugin that allow flutter apps to receive photos, videos, text, urls or any other file types from another app.
 
-
 ## Features
 
-- It's allow to share image, text, video ,urls and file from other app to flutter app. 
+- It's allow to share image, text, video ,urls and file from other app to flutter app.
 - It's allow to share multiple image, multiple video and multiple file from other app to flutter app.
- 
+
 ## Installing
 
 command:
@@ -24,18 +23,23 @@ flutter_sharing_intent: ^(latest)
 ```
 
 ## Usage
-We are using following methods :- 
-* getMediaStream() * => Sets up a broadcast stream for receiving incoming media share change events. 
-* getInitialSharing() * => To get sharing data when app is start.
-* reset() * => To clear all sharing data 
+
+We are using following methods :-
+
+- getMediaStream() \* => Sets up a broadcast stream for receiving incoming media share change events.
+- getInitialSharing() \* => To get sharing data when app is start.
+- reset() \* => To clear all sharing data
 
 ### Android
- No External setup required
+
+No External setup required
 
 ### IOS
 
 #### 1. Add the following
+
 ios/Runner/info.plist
+
 ```xml
 ...
 <key>AppGroupId</key>
@@ -47,7 +51,7 @@ ios/Runner/info.plist
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>ShareMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+				<string>SharingMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			</array>
 		</dict>
 	</array>
@@ -65,7 +69,9 @@ ios/Runner/info.plist
 ##### Make sure the deployment target for Runner.app and the share extension is the same.
 
 ##### Add the following code:
+
 ios/Share Extension/info.plist
+
 ```xml
 ....
 	<key>NSExtension</key>
@@ -79,7 +85,7 @@ ios/Share Extension/info.plist
             <!-- To share images into your app-->
             <string>Image</string>
         </array>
-    
+
         <key>NSExtensionActivationRule</key>
         <dict>
             <!-- To share text into your app -->
@@ -109,8 +115,8 @@ ios/Share Extension/info.plist
 
 ios/Share Extension/ShareViewController.swift
 
-* Look at `loadIds()` for configure and details
-* hostAppBundleIdentifier will be your host app bundle identifier. For example in my case `com.techind.flutterSharingIntentExample`
+- Look at `loadIds()` for configure and details
+- hostAppBundleIdentifier will be your host app bundle identifier. For example in my case `com.techind.flutterSharingIntentExample`
 
 ```swift
 import UIKit
@@ -129,22 +135,22 @@ class ShareViewController: UIViewController {
         var appGroupId = ""
         var sharedMedia: [SharingFile] = []
         var sharedText: [String] = []
-    
+
         let imageContentType = UTType.image.identifier;
         let videoContentType = UTType.movie.identifier;
         let textContentType = UTType.text.identifier;
         let urlContentType = UTType.url.identifier;
         let fileURLType = UTType.fileURL.identifier;
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // load group and app id from build info
         loadIds();
 
     }
-    
+
     private func loadIds() {
- 
+
         // loading Share extension App Id
         let shareExtensionAppBundleIdentifier = Bundle.main.bundleIdentifier!;
 
@@ -158,13 +164,13 @@ class ShareViewController: UIViewController {
         // loading custom AppGroupId from Build Settings or use group.<hostAppBundleIdentifier>
         appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(hostAppBundleIdentifier)";
     }
-    
+
     override func viewDidAppear(_ animated: Bool) {
-      
+
         super.viewDidAppear(animated)
         // This will called after the user selects app from sharing app list.
         handleImageAttachment()
-      
+
        }
 
     func handleImageAttachment(){
@@ -187,14 +193,14 @@ class ShareViewController: UIViewController {
                        } else {
                            print(" \(attachment) File type is not supported by flutter shaing plugin.")
                        }
-                       
+
                    }
                }
            }
-        
+
     }
-    
-    
+
+
     private func handleText (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
         attachment.loadItem(forTypeIdentifier: textContentType, options: nil) { [weak self] data, error in
 
@@ -236,9 +242,9 @@ class ShareViewController: UIViewController {
               }
           }
       }
-    
+
     private func handleImages (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
-   
+
         attachment.loadItem(forTypeIdentifier: imageContentType, options: nil) { [weak self] data, error in
              if error == nil, let url = data as? URL, let this = self {
                  // Always copy
@@ -264,7 +270,7 @@ class ShareViewController: UIViewController {
              }
          }
      }
-    
+
     private func handleVideos (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
           attachment.loadItem(forTypeIdentifier: videoContentType, options: nil) { [weak self] data, error in
 
@@ -296,7 +302,7 @@ class ShareViewController: UIViewController {
               }
           }
       }
-    
+
     private func handleFiles (content: NSExtensionItem, attachment: NSItemProvider, index: Int) {
           attachment.loadItem(forTypeIdentifier: fileURLType, options: nil) { [weak self] data, error in
 
@@ -324,7 +330,7 @@ class ShareViewController: UIViewController {
               }
           }
       }
-    
+
     private func dismissWithError() {
             print("[ERROR] Error loading data!")
             let alert = UIAlertController(title: "Error", message: "Error loading data", preferredStyle: .alert)
@@ -464,11 +470,11 @@ extension NSItemProvider {
     var isMovie: Bool {
         return hasItemConformingToTypeIdentifier(UTType.movie.identifier)
     }
-  
+
     var isText: Bool {
         return hasItemConformingToTypeIdentifier(UTType.text.identifier)
     }
-    
+
     var isURL: Bool {
         return hasItemConformingToTypeIdentifier(UTType.url.identifier)
     }
@@ -478,8 +484,8 @@ extension NSItemProvider {
 }
 ```
 
-
 Add SharingFile.swift in ios/Share Extension
+
 ```swift
 import Foundation
 
@@ -488,20 +494,20 @@ class SharingFile: Codable {
     var thumbnail: String?; // video thumbnail
     var duration: Double?; // video duration in milliseconds
     var type: SharingFileType;
-    
-    
+
+
     init(value: String, thumbnail: String?, duration: Double?, type: SharingFileType) {
         self.value = value
         self.thumbnail = thumbnail
         self.duration = duration
         self.type = type
     }
-    
+
     // toString method to print out SharingFile details in the console
     func toString() {
         print("[SharingFile] \n\tvalue: \(self.value)\n\tthumbnail: \(self.thumbnail ?? "--" )\n\tduration: \(self.duration ?? 0)\n\ttype: \(self.type)")
     }
-    
+
     func toData(data: [SharingFile]) -> Data {
         let encodedData = try? JSONEncoder().encode(data)
         return encodedData!
@@ -510,6 +516,7 @@ class SharingFile: Codable {
 ```
 
 Add SharingFileType.swift in ios/Share Extension
+
 ```swift
 
 enum SharingFileType: Int, Codable {
@@ -522,18 +529,18 @@ enum SharingFileType: Int, Codable {
 
 ```
 
-
 #### 3. Add Runner and Share Extension in the same group
 
-* Go to the Capabilities tab and switch on the App Groups switch for both targets.
-* Add a new group and name it as you want. For example `group.YOUR_HOST_APP_BUNDLE_IDENTIFIER` in my case `group.com.techind.flutterSharingIntentExample`
+- Go to the Capabilities tab and switch on the App Groups switch for both targets.
+- Add a new group and name it as you want. For example `group.YOUR_HOST_APP_BUNDLE_IDENTIFIER` in my case `group.com.techind.flutterSharingIntentExample`
 
 #### 4. Add following code in your host app AppDelegate file
+
 ios/Runner/AppDelegate.swift
 
 ```swift
     import flutter_sharing_intent
-    ....   
+    ....
     override func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
 
      let sharingIntent = SwiftFlutterSharingIntentPlugin.instance
@@ -615,4 +622,3 @@ class _MyAppState extends State<MyApp> {
   }
 }
 ```
-

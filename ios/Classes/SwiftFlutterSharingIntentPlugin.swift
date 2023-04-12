@@ -12,36 +12,35 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     
     
     private var eventSinkMedia: FlutterEventSink? = nil;
-    
     // Singleton is required for calling functions directly from AppDelegate
     // - it is required if the developer is using also another library, which requires to call "application(_:open:options:)"
     // -> see Example app
     public static let instance = SwiftFlutterSharingIntentPlugin()
 
     
-  public static func register(with registrar: FlutterPluginRegistrar) {
-            let channel = FlutterMethodChannel(name: "flutter_sharing_intent",binaryMessenger:registrar.messenger())
-   
-            registrar.addMethodCallDelegate(instance, channel: channel)
-            
-            let chargingChannelMedia = FlutterEventChannel(name: kEventsChannelMedia, binaryMessenger: registrar.messenger())
-            chargingChannelMedia.setStreamHandler(instance)
-            
-            
-            registrar.addApplicationDelegate(instance)
-            registrar.addMethodCallDelegate(instance, channel: channel)
-  }
+    public static func register(with registrar: FlutterPluginRegistrar) {
+        let channel = FlutterMethodChannel(name: "flutter_sharing_intent",binaryMessenger:registrar.messenger())
 
-//  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-//    result("iOS " + UIDevice.current.systemVersion)
-//  }
+        registrar.addMethodCallDelegate(instance, channel: channel)
+
+        let chargingChannelMedia = FlutterEventChannel(name: kEventsChannelMedia, binaryMessenger: registrar.messenger())
+        chargingChannelMedia.setStreamHandler(instance)
+
+
+        registrar.addApplicationDelegate(instance)
+        registrar.addMethodCallDelegate(instance, channel: channel)
+    }
+
+    //  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    //    result("iOS " + UIDevice.current.systemVersion)
+    //  }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         
         switch call.method {
         case "getInitialSharing":
             result(toJson(data: self.initialSharing));
-             /// Clear cache data to send only once
+            /// Clear cache data to send only once
             self.initialSharing = nil
             self.latestSharing = nil
 
@@ -60,7 +59,6 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     // By Adding bundle id to prefix, we will ensure that the correct app will be openned
     public func hasSameSchemePrefix(url: URL?) -> Bool {
         if let url = url, let appDomain = Bundle.main.bundleIdentifier {
-//            print("hasSameSchemePrefix ==>> url : \(url), appDomain : \(appDomain) , \(url.absoluteString.hasPrefix("\(self.customSchemePrefix)-\(appDomain)"))")
             return url.absoluteString.hasPrefix("\(self.customSchemePrefix)-\(appDomain)")
         }
         return false
@@ -123,13 +121,13 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
         if let url = url {
-            let appDomain = Bundle.main.bundleIdentifier!
             let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
-
             let userDefaults = UserDefaults(suiteName: appGroupId)
+
+
             if url.fragment == "media" {
                 if let key = url.host?.components(separatedBy: "=").last,
-                    let json = userDefaults?.object(forKey: key) as? Data {
+                   let json = userDefaults?.object(forKey: key) as? Data {
                     let sharedArray = decode(data: json)
                     
                     let sharedMediaFiles: [SharingFile] = sharedArray.compactMap {
@@ -153,13 +151,15 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
                 }
             } else if url.fragment == "file" {
                 if let key = url.host?.components(separatedBy: "=").last,
-                    let json = userDefaults?.object(forKey: key) as? Data {
+                   let json = userDefaults?.object(forKey: key) as? Data {
                     let sharedArray = decode(data: json)
                     let sharedMediaFiles: [SharingFile] = sharedArray.compactMap{
                         guard getAbsolutePath(for: $0.value) != nil else {
                             return nil
                         }
-                        return SharingFile.init(value: $0.value, thumbnail: nil, duration: nil, type: $0.type)
+                        return SharingFile.init(value: $0.value,
+                                                thumbnail: nil, duration: nil,
+                                                type: $0.type)
                     }
                     latestSharing = sharedMediaFiles
                     if(setInitialData) {
@@ -169,7 +169,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
                 }
             } else if url.fragment == "url" {
                 if let key = url.host?.components(separatedBy: "=").last,
-                    let sharedArray = userDefaults?.object(forKey: key) as? [String] {
+                   let sharedArray = userDefaults?.object(forKey: key) as? [String] {
                     latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type:  SharingFileType.url)]
                     if(setInitialData) {
                         initialSharing = latestSharing
@@ -178,7 +178,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
                 }
             } else if url.fragment == "text" {
                 if let key = url.host?.components(separatedBy: "=").last,
-                    let sharedArray = userDefaults?.object(forKey: key) as? [String] {
+                   let sharedArray = userDefaults?.object(forKey: key) as? [String] {
                     latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type: SharingFileType.text)]
                     if(setInitialData) {
                         initialSharing = latestSharing
@@ -187,7 +187,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
                 }
             } else {
                 latestSharing = [SharingFile.init(value: url.absoluteString, thumbnail: nil, duration: nil, type: SharingFileType.text)]
-    
+
                 if(setInitialData) {
                     initialSharing = latestSharing
                 }
@@ -231,32 +231,41 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     }
     
     private func getFullSizeImageURLAndOrientation(for asset: PHAsset)-> (String?, Int) {
-           var url: String? = nil
-           var orientation: Int = 0
-           let semaphore = DispatchSemaphore(value: 0)
-           let options2 = PHContentEditingInputRequestOptions()
-           options2.isNetworkAccessAllowed = true
-           asset.requestContentEditingInput(with: options2){(input, info) in
-               orientation = Int(input?.fullSizeImageOrientation ?? 0)
-               url = input?.fullSizeImageURL?.path
-               semaphore.signal()
-           }
-           semaphore.wait()
-           return (url, orientation)
-       }
+        var url: String? = nil
+        var orientation: Int = 0
+        let semaphore = DispatchSemaphore(value: 0)
+        let options2 = PHContentEditingInputRequestOptions()
+        options2.isNetworkAccessAllowed = true
+        asset.requestContentEditingInput(with: options2){(input, info) in
+            orientation = Int(input?.fullSizeImageOrientation ?? 0)
+            url = input?.fullSizeImageURL?.path
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return (url, orientation)
+    }
     
     private func decode(data: Data) -> [SharingFile] {
-        let encodedData = try? JSONDecoder().decode([SharingFile].self, from: data)
-        return encodedData!
+        do {
+            let encodedData = try JSONDecoder().decode([SharingFile].self, from: data)
+            return encodedData
+        } catch {
+            fatalError(error.localizedDescription)
+        }
+
     }
     
     private func toJson(data: [SharingFile]?) -> String? {
         if data == nil {
             return nil
         }
-        let encodedData = try? JSONEncoder().encode(data)
-         let json = String(data: encodedData!, encoding: .utf8)!
-        return json
+        do {
+            let encodedData = try JSONEncoder().encode(data)
+            let json = String(data: encodedData, encoding: .utf8)!
+            return json
+        } catch {
+            fatalError(error.localizedDescription)
+        }
     }
 }
 
