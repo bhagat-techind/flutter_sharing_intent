@@ -32,4 +32,4 @@ class SharedFile {
   }
 }
 
-enum SharedMediaType { TEXT, URL, IMAGE, VIDEO, FILE, OTHER }
+enum SharedMediaType { text, url, image, video, file, other }
