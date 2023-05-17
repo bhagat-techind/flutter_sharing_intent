@@ -1,6 +1,6 @@
 name: flutter_sharing_intent
 description: A flutter plugin that allow flutter apps to receive photos, videos, text, urls or any other file types from another app.
-version: 1.0.6
+version: 1.1.0
 homepage: https://github.com/bhagat-techind/flutter_sharing_intent.git
 
 environment:
@@ -39,10 +39,3 @@ flutter:
         pluginClass: FlutterSharingIntentPlugin
       ios:
         pluginClass: FlutterSharingIntentPlugin
-      linux:
-        pluginClass: FlutterSharingIntentPlugin
-      macos:
-        pluginClass: FlutterSharingIntentPlugin
-      windows:
-        pluginClass: FlutterSharingIntentPluginCApi
-
