@@ -6,32 +6,24 @@
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
-            <key>PHSupportedMediaTypes</key>
-              <array>
-                   <!-- To share video into your app-->
-                  <string>Video</string>
-                  <!-- To share images into your app-->
-                  <string>Image</string>
-              </array>
-                          
 			<key>NSExtensionActivationRule</key>
-            <dict>
-                <!-- To share text into your app -->
-                <key>NSExtensionActivationSupportsText</key>
-                <true/>
-                <!-- TO share urls into your app -->
-                <key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-                <integer>1</integer>
-                <!-- To share images into your app -->
-                <key>NSExtensionActivationSupportsImageWithMaxCount</key>
-                <integer>20</integer>
-                <!-- To share video into your app -->
-                <key>NSExtensionActivationSupportsMovieWithMaxCount</key>
-                <integer>10</integer>
-                <!-- To share other files into your app -->
-                <key>NSExtensionActivationSupportsFileWithMaxCount</key>
-                <integer>10</integer>
-            </dict>
+			<dict>
+				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
+				<integer>10</integer>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>20</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>10</integer>
+				<key>NSExtensionActivationSupportsText</key>
+				<true/>
+				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+				<integer>1</integer>
+			</dict>
+			<key>PHSupportedMediaTypes</key>
+			<array>
+				<string>Video</string>
+				<string>Image</string>
+			</array>
 		</dict>
 		<key>NSExtensionMainStoryboard</key>
 		<string>MainInterface</string>

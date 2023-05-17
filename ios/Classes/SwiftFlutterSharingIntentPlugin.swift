@@ -108,14 +108,16 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
                    let json = userDefaults?.object(forKey: key) as? Data {
                     let sharedArray = decode(data: json)
                     let sharedMediaFiles: [SharingFile] = sharedArray.compactMap {
-                        guard let value = getAbsolutePath(for: $0.value) else { return nil }
+                        guard let jsonValue = $0.value, let value = getAbsolutePath(for: jsonValue) else {
+                            return SharingFile.init(value: "", path: nil, thumbnail: nil, duration: $0.duration, type: $0.type)
+                        }
                         if ($0.type == .video && $0.thumbnail != nil) {
                             let thumbnail = getAbsolutePath(for: $0.thumbnail!)
-                            return SharingFile.init(value: value, thumbnail: thumbnail, duration: $0.duration, type: $0.type)
+                            return SharingFile.init(value: value, path: nil, thumbnail: thumbnail, duration: $0.duration, type: $0.type)
                         } else if ($0.type == .video && $0.thumbnail == nil) {
-                            return SharingFile.init(value: value, thumbnail: nil, duration: $0.duration, type: $0.type)
+                            return SharingFile.init(value: value, path: nil, thumbnail: nil, duration: $0.duration, type: $0.type)
                         }
-                        return SharingFile.init(value: value, thumbnail: nil, duration: $0.duration, type: $0.type)
+                        return SharingFile.init(value: value, path: nil, thumbnail: nil, duration: $0.duration, type: $0.type)
                     }
                     latestSharing = sharedMediaFiles
                     if setInitialData {
@@ -128,10 +130,10 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
                    let json = userDefaults?.object(forKey: key) as? Data {
                     let sharedArray = decode(data: json)
                     let sharedMediaFiles: [SharingFile] = sharedArray.compactMap{
-                        guard getAbsolutePath(for: $0.value) != nil else { return nil }
-                        return SharingFile.init(value: $0.value,
-                                                thumbnail: nil, duration: nil,
-                                                type: $0.type)
+                        guard let jsonValue = $0.value, getAbsolutePath(for: jsonValue) != nil else {
+                            return SharingFile.init(value: "", path: nil, thumbnail: nil, duration: $0.duration, type: $0.type)
+                        }
+                        return SharingFile.init(value: jsonValue, path: nil,  thumbnail: nil, duration: nil, type: $0.type)
                     }
                     latestSharing = sharedMediaFiles
                     if setInitialData {
@@ -142,7 +144,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
             case "url":
                 if let key = url.host?.components(separatedBy: "=").last,
                    let sharedArray = userDefaults?.object(forKey: key) as? [String] {
-                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type:  SharingFileType.url)]
+                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), path: nil, thumbnail: nil, duration: nil, type:  SharingFileType.url)]
                     if setInitialData {
                         initialSharing = latestSharing
                     }
@@ -151,14 +153,14 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
             case "text":
                 if let key = url.host?.components(separatedBy: "=").last,
                    let sharedArray = userDefaults?.object(forKey: key) as? [String] {
-                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type: SharingFileType.text)]
+                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), path: nil, thumbnail: nil, duration: nil, type: SharingFileType.text)]
                     if setInitialData {
                         initialSharing = latestSharing
                     }
                     eventSinkMedia?(toJson(data: latestSharing))
                 }
             default:
-                latestSharing = [SharingFile.init(value: url.absoluteString, thumbnail: nil, duration: nil, type: SharingFileType.text)]
+                latestSharing = [SharingFile.init(value: url.absoluteString, path: nil, thumbnail: nil, duration: nil, type: SharingFileType.text)]
                 if setInitialData {
                     initialSharing = latestSharing
                 }
@@ -219,13 +221,17 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
             // but since I can't test previous iOS-version, let's
             // support both, optional, and see where the data actually resides
             let encodedData = try JSONDecoder().decode([SharingFile].self, from: data)
-            if encodedData.path != nil {
-                if encodedData.value == nil {
-                    encodedData.value = encodedData.path
+            var resultingData: [SharingFile] = []
+            for sharingFile in encodedData {
+                if sharingFile.path != nil {
+                    if sharingFile.value == nil {
+                        sharingFile.value = sharingFile.path
+                    }
+                    sharingFile.path = nil
                 }
-                encodedData.path = null
+                resultingData.append(sharingFile)
             }
-            return encodedData
+            return resultingData
         } catch {
             // TODO: Do NOT Crash, show an error message
             fatalError(error.localizedDescription)
