@@ -43,6 +43,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
 
   /// The MethodChannel that will the communication between Flutter and native Android
   private lateinit var channel : MethodChannel
+  private lateinit var eventChannel: EventChannel
 
   private var eventSinkSharing: EventChannel.EventSink? = null
 
@@ -54,8 +55,8 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
     channel = MethodChannel(binaryMessenger, "flutter_sharing_intent")
     channel.setMethodCallHandler(this)
 
-    val eChannelSharing = EventChannel(binaryMessenger, EVENTS_CHANNEL_MEDIA)
-    eChannelSharing.setStreamHandler(this)
+    eventChannel = EventChannel(binaryMessenger, EVENTS_CHANNEL_MEDIA)
+    eventChannel.setStreamHandler(this)
 
   }
 
@@ -83,6 +84,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
 
   override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
+    eventChannel.setStreamHandler(null)
   }
 
   private fun handleIntent(intent: Intent, initial: Boolean) {
