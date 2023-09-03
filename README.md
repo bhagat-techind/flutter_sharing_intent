@@ -32,7 +32,94 @@ We are using following methods :-
 
 ### Android
 
-No External setup required
+android/app/src/main/manifest.xml
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="{YOUR_PACKAGE_NAME}">
+.....
+
+  <application
+        android:name="io.flutter.app.FlutterApplication"
+        ...
+        >
+
+    <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="true"
+            android:theme="@style/LaunchTheme"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize"
+            android:screenOrientation="portrait"
+            android:launchMode="singleTask">
+
+            <!--TODO:  Add this filter, if you want support opening urls into your app-->
+            <intent-filter>
+               <action android:name="android.intent.action.VIEW" />
+               <category android:name="android.intent.category.DEFAULT" />
+               <category android:name="android.intent.category.BROWSABLE" />
+               <data
+                   android:scheme="https"
+                   android:host="example.com"
+                   android:pathPrefix="/invite"/>
+            </intent-filter>
+
+            <!--TODO: Add this filter, if you want to support sharing text into your app-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/*" />
+            </intent-filter>
+
+            <!--TODO: Add this filter, if you want to support sharing images into your app-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <!--TODO: Add this filter, if you want to support sharing multi images into your app-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <!--TODO: Add this filter, if you want to support sharing videos into your app-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
+            <!--TODO: Add this filter, if you want to support sharing multi videos into your app-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
+
+            <!--TODO: Add this filter, if you want to support sharing any type of files-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!--TODO: Add this filter, if you want to support sharing multiple files of any type-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+      </activity>
+
+  </application>
+</manifest>
+....
+```
 
 ### IOS
 
@@ -43,7 +130,8 @@ ios/Runner/info.plist
 ```xml
 ...
 <key>AppGroupId</key>
-<string>$(CUSTOM_GROUP_ID)</string>
+<!--HERE set your group Id-->
+<string>$(CUSTOM_GROUP_ID)</string> 
 <key>CFBundleURLTypes</key>
 	<array>
 		<dict>
