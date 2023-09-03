@@ -39,10 +39,4 @@ flutter:
         pluginClass: FlutterSharingIntentPlugin
       ios:
         pluginClass: FlutterSharingIntentPlugin
-      linux:
-        pluginClass: FlutterSharingIntentPlugin
-      macos:
-        pluginClass: FlutterSharingIntentPlugin
-      windows:
-        pluginClass: FlutterSharingIntentPluginCApi
 
