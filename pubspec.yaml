@@ -39,4 +39,3 @@ flutter:
         pluginClass: FlutterSharingIntentPlugin
       ios:
         pluginClass: FlutterSharingIntentPlugin
-
