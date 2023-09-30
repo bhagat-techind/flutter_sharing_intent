@@ -21,7 +21,7 @@ class SharedFile {
       this.type = SharedMediaType.OTHER});
 
   SharedFile.fromJson(Map<String, dynamic> json)
-      : value =  json['value'],
+      : value =  json['value'] ?? json['path'],
         thumbnail = json['thumbnail'],
         duration = json['duration'],
         type = SharedMediaType.values[json['type']];
