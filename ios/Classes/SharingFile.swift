@@ -11,12 +11,7 @@ class SharingFile: Codable {
     var duration: Double?; // video duration in milliseconds
     var type: SharingFileType;
 
-    enum CodingKeys: String, CodingKey {
-        case value = "path"
-        case thumbnail
-        case duration
-        case type
-    }
+
     
     init(value: String, thumbnail: String?, duration: Double?, type: SharingFileType) {
         self.value = value
