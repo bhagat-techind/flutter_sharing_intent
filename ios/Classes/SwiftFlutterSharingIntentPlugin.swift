@@ -123,8 +123,6 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
         if let url = url {
             let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
             let userDefaults = UserDefaults(suiteName: appGroupId)
-
-
             if url.fragment == "media" {
                 if let key = url.host?.components(separatedBy: "=").last,
                    let json = userDefaults?.object(forKey: key) as? Data {
@@ -250,9 +248,9 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
             let encodedData = try JSONDecoder().decode([SharingFile].self, from: data)
             return encodedData
         } catch {
-            fatalError(error.localizedDescription)
+            print("Decoding error:", error.localizedDescription)
+            return []
         }
-
     }
     
     private func toJson(data: [SharingFile]?) -> String? {
