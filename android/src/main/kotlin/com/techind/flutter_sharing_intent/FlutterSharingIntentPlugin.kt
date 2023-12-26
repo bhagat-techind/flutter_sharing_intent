@@ -106,16 +106,10 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
       (intent.type == null || intent.type?.startsWith("text") == true)
               && intent.action == Intent.ACTION_SEND -> { // Sharing text
 
-        val value = getSharingText(intent)
+        val value = getSharingText(intent) ?: getSharingUris(intent)
         if (initial) initialSharing = value
         latestSharing = value
         Log.w(TAG,"handleIntent ==>> $value")
-        if (value == null) {
-          value = getSharingUris(intent)
-          if (initial) initialSharing = value
-          latestSharing = value
-          Log.w(TAG,"handleIntent ==>> $value")
-        }
         eventSinkSharing?.success(value?.toString())
 
       }
