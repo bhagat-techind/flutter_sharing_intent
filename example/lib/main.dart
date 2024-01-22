@@ -50,7 +50,7 @@ class _MyAppState extends State<MyApp> {
         .then((List<SharedFile> value) {
       if (kDebugMode) {
         print(
-          "Shared: getInitialMedia => ${value.map((f) => f.value).join(",")}");
+            "Shared: getInitialMedia => ${value.map((f) => f.value).join(",")}");
       }
       setState(() {
         list = value;
