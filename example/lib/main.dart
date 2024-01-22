@@ -36,7 +36,7 @@ class _MyAppState extends State<MyApp> {
         list = value;
       });
       if (kDebugMode) {
-        print("Shared: getMediaStream ${value.map((f) => f.value).join(",")}");
+        print(" Shared: getMediaStream ${value.map((f) => f.value).join(",")}");
       }
     }, onError: (err) {
       if (kDebugMode) {
