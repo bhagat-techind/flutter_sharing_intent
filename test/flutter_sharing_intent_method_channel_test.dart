@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_sharing_intent/flutter_sharing_intent_method_channel.dart';
 
 void main() {
-  MethodChannelFlutterSharingIntent platform = MethodChannelFlutterSharingIntent();
+  MethodChannelFlutterSharingIntent platform =
+      MethodChannelFlutterSharingIntent();
   const MethodChannel channel = MethodChannel('flutter_sharing_intent');
 
   TestWidgetsFlutterBinding.ensureInitialized();
