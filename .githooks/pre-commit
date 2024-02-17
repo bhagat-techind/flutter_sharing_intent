@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 # Format code with flutter format
 printf "\e[33;1m%s\e[0m\n" '>>>Running the Flutter formatter'
