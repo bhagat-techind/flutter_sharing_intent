@@ -1,6 +1,5 @@
-## 1.1.0
+## 1.1.1
 
-* Remove non-supporting platform #27
-* Now user can choose which mime type they want to support for their app. #15 & #3
-* Detailed about CUSTOM_GROUP_ID for iOS #10 & #9
-* Minor update for stability
+* Fixed iOS issue #41
+* Update android target SDK to 34
+* Update app build.gradle
