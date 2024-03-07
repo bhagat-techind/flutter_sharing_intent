@@ -1,0 +1,5 @@
+Before publish please run the publish command in dry-run mode to see if everything passes analysis:
+flutter pub publish --dry-run
+
+The next step is publishing to pub.dev
+flutter pub publish
