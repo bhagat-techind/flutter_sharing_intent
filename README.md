@@ -444,7 +444,7 @@ class ShareViewController: UIViewController {
                         if #available(iOS 18.0, *) {
                             let _ = application.open(url!, options: [:], completionHandler: nil)
                         } else {
-                            let _ = application.perform(selectorOpenURL, with: url) != nil
+                            let _ = application.perform(selectorOpenURL, with: url)
                         }
                     }
                     responder = responder?.next
