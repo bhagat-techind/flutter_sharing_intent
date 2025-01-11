@@ -30,6 +30,8 @@ We are using following methods :-
 - getInitialSharing() \* => To get sharing data when app is start.
 - reset() \* => To clear all sharing data
 
+## Setup
+
 ### Android
 
 android/app/src/main/manifest.xml
@@ -621,6 +623,7 @@ enum SharingFileType: Int, Codable {
 
 - Go to the Capabilities tab and switch on the App Groups switch for both targets.
 - Add a new group and name it as you want. For example `group.YOUR_HOST_APP_BUNDLE_IDENTIFIER` in my case `group.com.techind.flutterSharingIntentExample`
+- Add User-defined(Build Settings -> +) string CUSTOM_GROUP_ID in BOTH Targets: Runner and Share Extension and set value to group id created above. You can use different group ids depends on your flavor schemes
 
 #### 4. Add following code in your host app AppDelegate file
 
@@ -710,3 +713,10 @@ class _MyAppState extends State<MyApp> {
   }
 }
 ```
+
+## Troubleshooting
+
+    * Error: No such module 'receive_sharing_intent'
+     * 
+
+
