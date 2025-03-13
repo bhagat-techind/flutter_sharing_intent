@@ -1,5 +1,6 @@
 package com.techind.flutter_sharing_intent
 
+import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -129,7 +130,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
         intent.action == Intent.ACTION_WEB_SEARCH -> {
             val value = JSONArray().put(
                 JSONObject()
-                    .put("value", intent.dataString)
+                    .put("value", intent.getStringExtra(SearchManager.QUERY))
                     .put("type", MediaType.WEB_SEARCH.ordinal)
             )
             if (initial) initialSharing = value
