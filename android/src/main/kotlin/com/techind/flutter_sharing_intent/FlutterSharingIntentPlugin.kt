@@ -1,5 +1,6 @@
 package com.techind.flutter_sharing_intent
 
+import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -126,8 +127,19 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           Log.w(TAG,"handleIntent ==>> $value")
           eventSinkSharing?.success(value?.toString())
         }
+        intent.action == Intent.ACTION_WEB_SEARCH -> {
+            val value = JSONArray().put(
+                JSONObject()
+                    .put("value", intent.getStringExtra(SearchManager.QUERY))
+                    .put("type", MediaType.WEB_SEARCH.ordinal)
+            )
+            if (initial) initialSharing = value
+            latestSharing = value
+            Log.w(TAG,"handleIntent ==>> $value")
+            eventSinkSharing?.success(value?.toString())
+        }
       }
-    }    
+    }
   }
 
   private fun getSharingUris(intent: Intent?): JSONArray? {
@@ -218,6 +230,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
       mimeType?.startsWith("video") == true -> MediaType.VIDEO
       mimeType?.startsWith("text") == true -> MediaType.TEXT
       mimeType?.startsWith("url") == true -> MediaType.URL
+      mimeType?.startsWith("web_search") == true -> MediaType.WEB_SEARCH
       else -> MediaType.FILE
     }
   }
@@ -246,7 +259,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   }
 
   enum class MediaType {
-    TEXT, URL, IMAGE, VIDEO, FILE ;
+    TEXT, URL, IMAGE, VIDEO, FILE, WEB_SEARCH ;
   }
 
   override fun onNewIntent(intent: Intent): Boolean {
