@@ -103,7 +103,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           val value = getSharingUris(intent)
           if (initial) initialSharing = value
           latestSharing = value
-          Log.w(TAG,"handleIntent ==>> $value")
+          Log.w(TAG,"Image/Video : handleIntent ==>> $value")
           eventSinkSharing?.success(value?.toString())
         }
         (intent.type == null || intent.type?.startsWith("text") == true)
@@ -112,7 +112,8 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           val value = getSharingText(intent) ?: getSharingUris(intent)
           if (initial) initialSharing = value
           latestSharing = value
-          Log.w(TAG,"handleIntent ==>> $value")
+          Log.w(TAG,"text : handleIntent ==>> $value")
+//          Log.w(TAG,"text : handleIntent ==>> ${eventSinkSharing!=null}")
           eventSinkSharing?.success(value?.toString())
 
         }
@@ -124,7 +125,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           )
           if (initial) initialSharing = value
           latestSharing = value
-          Log.w(TAG,"handleIntent ==>> $value")
+          Log.w(TAG,"ACTION_VIEW : handleIntent ==>> $value")
           eventSinkSharing?.success(value?.toString())
         }
         intent.action == Intent.ACTION_WEB_SEARCH -> {
@@ -135,7 +136,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
             )
             if (initial) initialSharing = value
             latestSharing = value
-            Log.w(TAG,"handleIntent ==>> $value")
+            Log.w(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> $value")
             eventSinkSharing?.success(value?.toString())
         }
       }
@@ -287,12 +288,23 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   }
 
   override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+    Log.d(TAG,"onListen ==>> $arguments, $events")
     when (arguments) {
-      "sharing" -> eventSinkSharing = events
+//      "sharing" -> eventSinkSharing = events
+      "sharing" -> {
+        eventSinkSharing = events
+
+
+        latestSharing?.let {
+          Log.d(TAG, "Sending cached sharing data onListen: $it")
+//          eventSinkSharing?.success(it.toString())
+        }
+      }
     }
   }
 
   override fun onCancel(arguments: Any?) {
+    Log.d(TAG,"onCancel ==>> $arguments")
     when (arguments) {
       "sharing" -> eventSinkSharing = null
     }
