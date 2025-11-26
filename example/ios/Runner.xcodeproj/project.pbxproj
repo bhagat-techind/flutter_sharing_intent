@@ -15,11 +15,10 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		D139F2C52ED71026003B9AEB /* FSIShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D139F2C42ED71026003B9AEB /* FSIShareViewController.swift */; };
 		D1E5E4802930D1F3003CD518 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E5E47F2930D1F3003CD518 /* ShareViewController.swift */; };
 		D1E5E4832930D1F3003CD518 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D1E5E4812930D1F3003CD518 /* MainInterface.storyboard */; };
 		D1E5E4872930D1F3003CD518 /* Share Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D1E5E47D2930D1F3003CD518 /* Share Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		D1E5E49B2935B88D003CD518 /* SharingFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E5E49A2935B88D003CD518 /* SharingFile.swift */; };
-		D1E5E49D2935B89A003CD518 /* SharingFileType.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E5E49C2935B89A003CD518 /* SharingFileType.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,14 +74,13 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A9692C59DEE20A823D36FBA7 /* Pods-Share Extension.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Share Extension.profile.xcconfig"; path = "Target Support Files/Pods-Share Extension/Pods-Share Extension.profile.xcconfig"; sourceTree = "<group>"; };
+		D139F2C42ED71026003B9AEB /* FSIShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSIShareViewController.swift; sourceTree = "<group>"; };
 		D17175F6293F7437002A8F16 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		D17F854C2947170D00023B96 /* Share Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Share Extension.entitlements"; sourceTree = "<group>"; };
 		D1E5E47D2930D1F3003CD518 /* Share Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Share Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D1E5E47F2930D1F3003CD518 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		D1E5E4822930D1F3003CD518 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		D1E5E4842930D1F3003CD518 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		D1E5E49A2935B88D003CD518 /* SharingFile.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SharingFile.swift; sourceTree = "<group>"; };
-		D1E5E49C2935B89A003CD518 /* SharingFileType.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SharingFileType.swift; sourceTree = "<group>"; };
 		D6428F5D8FF523033ACDD108 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		E3E0EDDEC785048A8E837455 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		E864E5B46844A89DA230A89C /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
@@ -181,9 +179,8 @@
 		D1E5E47E2930D1F3003CD518 /* Share Extension */ = {
 			isa = PBXGroup;
 			children = (
+				D139F2C42ED71026003B9AEB /* FSIShareViewController.swift */,
 				D17F854C2947170D00023B96 /* Share Extension.entitlements */,
-				D1E5E49C2935B89A003CD518 /* SharingFileType.swift */,
-				D1E5E49A2935B88D003CD518 /* SharingFile.swift */,
 				D1E5E47F2930D1F3003CD518 /* ShareViewController.swift */,
 				D1E5E4812930D1F3003CD518 /* MainInterface.storyboard */,
 				D1E5E4842930D1F3003CD518 /* Info.plist */,
@@ -405,9 +402,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D1E5E49B2935B88D003CD518 /* SharingFile.swift in Sources */,
-				D1E5E49D2935B89A003CD518 /* SharingFileType.swift in Sources */,
 				D1E5E4802930D1F3003CD518 /* ShareViewController.swift in Sources */,
+				D139F2C52ED71026003B9AEB /* FSIShareViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -515,6 +511,7 @@
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FlutterSharingIntent;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -651,6 +648,7 @@
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FlutterSharingIntent;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -681,6 +679,7 @@
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FlutterSharingIntent;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

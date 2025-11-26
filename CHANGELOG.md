@@ -10,3 +10,10 @@ All notable changes to this project will be documented in this file.
 ## 1.1.2
 
 * Add support for Apple Privacy Manifest #58
+
+## 1.1.3
+* Bug fix for iOS share extension not working in certain scenarios
+* Update example app dependencies
+* Update plugin dependencies
+* Update README.md example code
+* Update plugin iOS code

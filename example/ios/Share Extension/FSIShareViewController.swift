@@ -8,6 +8,12 @@ import Social
 import UIKit
 import UniformTypeIdentifiers
 
+public let kSchemePrefix = "SharingMedia"
+public let kUserDefaultsKey = "SharingKey"
+public let kUserDefaultsMessageKey = "SharingMessageKey"
+public let kAppGroupIdKey = "AppGroupId"
+public let kAppChannel = "flutter_sharing_intent"
+
 // @objc(FSIShareViewController)
 @available(swift, introduced: 5.0)
 open class FSIShareViewController: SLComposeServiceViewController {
