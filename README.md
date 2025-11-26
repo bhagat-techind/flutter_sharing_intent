@@ -1,4 +1,5 @@
 # flutter_sharing_intent
+[![pub package](https://img.shields.io/pub/v/flutter_sharing_intent.svg)](https://pub.dev/packages/flutter_sharing_intent)
 
 A flutter plugin that allow flutter apps to receive photos, videos, text, urls or any other file types from another app.
 
@@ -34,7 +35,7 @@ We are using following methods :-
 
 ### Android
 
-android/app/src/main/manifest.xml
+Add the following intent filters to your [android/app/src/main/AndroidManifest.xml](./example/android/app/src/main/AndroidManifest.xml):
 
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -130,6 +131,7 @@ android/app/src/main/manifest.xml
 
 #### 1. Add the following
 
+#### 2. Replace your [ios/Info.plist](./example/ios/Info.plist) with the following:
 ios/Runner/info.plist
 
 ```xml
@@ -153,7 +155,25 @@ ios/Runner/info.plist
 ...
 ```
 
-#### 2. Add Runner and Share Extension in the same group
+
+#### 2. Add the following to your [ios/Podfile](./example/ios/Podfile):
+```ruby
+...
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  # Share Extension is name of Extension which you created which is in this case 'Share Extension'
+  target 'Share Extension' do
+    inherit! :search_paths
+  end
+end
+...
+```
+
+#### 3. Add Runner and Share Extension in the same group
 
 * Go to `Signing & Capabilities` tab and add App Groups capability in **BOTH** Targets: `Runner` and `Share Extension`
 * Add a new container with the name of your choice. For example `group.MyContainer` in the example project its `group.com.techind.flutterSharingIntentExample`
@@ -163,9 +183,7 @@ ios/Runner/info.plist
 ##### Make sure the deployment target for Runner.app and the share extension is the same.
 
 
-#### 3. Add the following code:
-
-ios/Share Extension/info.plist
+#### 4. Add the following code in [ios/Share Extension/Info.plist](./example/ios/Share%20Extension/Info.plist):
 
 ```xml
 ....
@@ -209,7 +227,7 @@ ios/Share Extension/info.plist
 ```
 
 
-#### 4. Add the following to your [ios/Runner/Runner.entitlements](./example/ios/Runner/Runner.entitlements):
+#### 5. Add following code to [ios/Runner/Runner.entitlements](./example/ios/Runner/Runner.entitlements):
 
 
 ```xml
@@ -224,7 +242,7 @@ ios/Share Extension/info.plist
 
 Here `group.com.techind.flutterSharingIntentExample` is the App Group ID created in previous step.
 
-#### 5. Add the following to your [ios/Share Extension/FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift):
+#### 6. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift]:
 
 
 ##### Make your `ShareViewController`  [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `FSIShareViewController`:
@@ -242,9 +260,7 @@ class ShareViewController: RSIShareViewController {
 }
 ```
 
-#### 6. Add following code in your host app AppDelegate file
-
-ios/Runner/AppDelegate.swift
+#### 7. Add following code in your host app AppDelegate file - [ios/Runner/AppDelegate.swift](./example/ios/Runner/AppDelegate.swift)
 
 ```swift
     import flutter_sharing_intent
