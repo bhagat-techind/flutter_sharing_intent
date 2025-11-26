@@ -242,20 +242,14 @@ end
 
 Here `group.com.techind.flutterSharingIntentExample` is the App Group ID created in previous step.
 
-#### 6. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift]:
+#### 6. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift):
 
 
-##### Make your `ShareViewController`  [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `FSIShareViewController`:
+##### Make your `ShareViewController` [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `FSIShareViewController`:
 
 ```swift
 
-class ShareViewController: RSIShareViewController {
-      
-    // Use this method to return false if you don't want to redirect to host app automatically.
-    // Default is true
-    override func shouldAutoRedirect() -> Bool {
-        return false
-    }
+class ShareViewController: FSIShareViewController {
     
 }
 ```
