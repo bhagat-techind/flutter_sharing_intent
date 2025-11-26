@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
 
 import 'flutter_sharing_intent_platform_interface.dart';
-import 'package:flutter/services.dart';
 
 class FlutterSharingIntent {
   static FlutterSharingIntent instance = FlutterSharingIntent._();

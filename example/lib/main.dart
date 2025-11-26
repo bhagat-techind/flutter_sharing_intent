@@ -27,7 +27,7 @@ class _MyAppState extends State<MyApp> {
     super.initState();
   }
 
-  initSharingListener() {
+  void initSharingListener() {
     // For sharing images coming from outside the app while the app is in the memory
     _intentDataStreamSubscription = FlutterSharingIntent.instance
         .getMediaStream()
@@ -68,7 +68,8 @@ class _MyAppState extends State<MyApp> {
         body: Center(
           child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text('Sharing data: \n${list?.join("\n\n")}\n')),
+              child: SingleChildScrollView(
+                  child: Text('Sharing data: \n${list?.join("\n\n")}\n'))),
         ),
       ),
     );

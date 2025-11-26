@@ -1,12 +1,28 @@
 buildscript {
-    ext.kotlin_version = '1.6.10'
+    ext {
+        // The minimum SDK version required for the app to run
+        minSdkVersion = 21
+
+        // The SDK version used to compile the app
+        compileSdkVersion = 36
+
+        // The target SDK version that the app is optimized for
+        targetSdkVersion = 36
+
+        // The Kotlin version used for the project
+        kotlin_version = '2.1.20'
+
+        agpVersion = '8.6.0'
+        // Compatible AGP version - The Android Gradle Plugin version used for building the app
+//        build_version = '8.2.1'
+    }
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.1.2'
+        classpath 'com.android.tools.build:gradle:8.6.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }

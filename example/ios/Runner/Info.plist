@@ -47,6 +47,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+    
+    <key>AppGroupId</key>
+    <string>$(CUSTOM_GROUP_ID)</string>
+    
     <key>CFBundleURLTypes</key>
         <array>
             <dict>

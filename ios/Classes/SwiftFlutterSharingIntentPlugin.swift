@@ -2,10 +2,15 @@ import Flutter
 import Photos
 import UIKit
 
+public let kSchemePrefix = "SharingMedia"
+public let kUserDefaultsKey = "SharingKey"
+public let kUserDefaultsMessageKey = "SharingMessageKey"
+public let kAppGroupIdKey = "AppGroupId"
+public let kAppChannel = "flutter_sharing_intent"
+
 public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, FlutterPlugin {
-    
-    static let kEventsChannelMedia = "flutter_sharing_intent/events-sharing";
-    private var customSchemePrefix = "SharingMedia";
+    static let kMessagesChannel = "\(kAppChannel)/messages"
+    static let kEventsChannelMedia = "\(kAppChannel)/events-sharing";
     
     private var initialSharing: [SharingFile]? = nil
     private var latestSharing: [SharingFile]? = nil
@@ -19,7 +24,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
     
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let channel = FlutterMethodChannel(name: "flutter_sharing_intent",binaryMessenger:registrar.messenger())
+        let channel = FlutterMethodChannel(name: kAppChannel,binaryMessenger:registrar.messenger())
 
         registrar.addMethodCallDelegate(instance, channel: channel)
 
@@ -28,7 +33,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
 
         registrar.addApplicationDelegate(instance)
-        registrar.addMethodCallDelegate(instance, channel: channel)
+        // registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
     //  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -59,7 +64,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     // By Adding bundle id to prefix, we will ensure that the correct app will be openned
     public func hasSameSchemePrefix(url: URL?) -> Bool {
         if let url = url, let appDomain = Bundle.main.bundleIdentifier {
-            return url.absoluteString.hasPrefix("\(self.customSchemePrefix)-\(appDomain)")
+            return url.absoluteString.hasPrefix("\(kSchemePrefix)-\(appDomain)")
         }
         return false
     }
@@ -120,82 +125,118 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     }
     
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
-        if let url = url {
-            let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
-            let userDefaults = UserDefaults(suiteName: appGroupId)
-            if url.fragment == "media" {
-                if let key = url.host?.components(separatedBy: "=").last,
-                   let json = userDefaults?.object(forKey: key) as? Data {
-                    let sharedArray = decode(data: json)
-                    
-                    let sharedMediaFiles: [SharingFile] = sharedArray.compactMap {
-                        guard let value = getAbsolutePath(for: $0.value) else {
-                            return nil
-                        }
-                        if ($0.type == .video && $0.thumbnail != nil) {
-                            let thumbnail = getAbsolutePath(for: $0.thumbnail!)
-                            return SharingFile.init(value: value, thumbnail: thumbnail, duration: $0.duration, type: $0.type)
-                        } else if ($0.type == .video && $0.thumbnail == nil) {
-                            return SharingFile.init(value: value, thumbnail: nil, duration: $0.duration, type: $0.type)
-                        }
-                        
-                        return SharingFile.init(value: value, thumbnail: nil, duration: $0.duration, type: $0.type)
-                    }
-                    latestSharing = sharedMediaFiles
-                    if(setInitialData) {
-                        initialSharing = latestSharing
-                    }
-                    eventSinkMedia?(toJson(data: latestSharing))
-                }
-            } else if url.fragment == "file" {
-                if let key = url.host?.components(separatedBy: "=").last,
-                   let json = userDefaults?.object(forKey: key) as? Data {
-                    let sharedArray = decode(data: json)
-                    let sharedMediaFiles: [SharingFile] = sharedArray.compactMap{
-                        guard getAbsolutePath(for: $0.value) != nil else {
-                            return nil
-                        }
-                        return SharingFile.init(value: $0.value,
-                                                thumbnail: nil, duration: nil,
-                                                type: $0.type)
-                    }
-                    latestSharing = sharedMediaFiles
-                    if(setInitialData) {
-                        initialSharing = latestSharing
-                    }
-                    eventSinkMedia?(toJson(data: latestSharing))
-                }
-            } else if url.fragment == "url" {
-                if let key = url.host?.components(separatedBy: "=").last,
-                   let sharedArray = userDefaults?.object(forKey: key) as? [String] {
-                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type:  SharingFileType.url)]
-                    if(setInitialData) {
-                        initialSharing = latestSharing
-                    }
-                    eventSinkMedia?(toJson(data: latestSharing))
-                }
-            } else if url.fragment == "text" {
-                if let key = url.host?.components(separatedBy: "=").last,
-                   let sharedArray = userDefaults?.object(forKey: key) as? [String] {
-                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type: SharingFileType.text)]
-                    if(setInitialData) {
-                        initialSharing = latestSharing
-                    }
-                    eventSinkMedia?(toJson(data: latestSharing))
-                }
-            } else {
-                latestSharing = [SharingFile.init(value: url.absoluteString, thumbnail: nil, duration: nil, type: SharingFileType.text)]
-
-                if(setInitialData) {
-                    initialSharing = latestSharing
-                }
-                eventSinkMedia?(latestSharing)
-            }
-            return true
-        }
-        latestSharing = nil
-        return false
-    }
+           let appGroupId = Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String
+           let defaultGroupId = "group.\(Bundle.main.bundleIdentifier!)"
+           let userDefaults = UserDefaults(suiteName: appGroupId ?? defaultGroupId)
+           
+           let message = userDefaults?.string(forKey: kUserDefaultsMessageKey)
+           if let json = userDefaults?.object(forKey: kUserDefaultsKey) as? Data {
+               let sharedArray = decode(data: json)
+               let sharedMediaFiles: [SharingFile] = sharedArray.compactMap {
+                   guard let value = $0.type == .text || $0.type == .url ? $0.value
+                           : getAbsolutePath(for: $0.value) else {
+                       return nil
+                   }
+                   
+                   return SharingFile(
+                    value: value,
+                       mimeType: $0.mimeType,
+                       thumbnail: getAbsolutePath(for: $0.thumbnail),
+                       duration: $0.duration,
+                       type: $0.type,
+                       message: message
+                   )
+               }
+               latestSharing = sharedMediaFiles
+               if(setInitialData) {
+                   initialSharing = latestSharing
+               }
+               eventSinkMedia?(toJson(data: latestSharing))
+           }
+           return true
+       }
+    
+//    private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
+//        if let url = url {
+//            let appGroupId = (Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
+//            let userDefaults = UserDefaults(suiteName: appGroupId)
+//            let message = userDefaults?.string(forKey: kUserDefaultsMessageKey)
+//            if let json = userDefaults?.object(forKey: kUserDefaultsKey) as? Data {
+//                print("SwiftFlutterSharingIntentPlugin : [handleUrl] \(json)")
+//            }
+//            if url.fragment == "media" {
+//                if let key = url.host?.components(separatedBy: "=").last,
+//                   let json = userDefaults?.object(forKey: key) as? Data {
+//                    let sharedArray = decode(data: json)
+//                    
+//                    let sharedMediaFiles: [SharingFile] = sharedArray.compactMap {
+//                        guard let value = getAbsolutePath(for: $0.value) else {
+//                            return nil
+//                        }
+//                        if ($0.type == .video && $0.thumbnail != nil) {
+//                            let thumbnail = getAbsolutePath(for: $0.thumbnail!)
+//                            return SharingFile.init(value: value, thumbnail: thumbnail, duration: $0.duration, type: $0.type)
+//                        } else if ($0.type == .video && $0.thumbnail == nil) {
+//                            return SharingFile.init(value: value, thumbnail: nil, duration: $0.duration, type: $0.type)
+//                        }
+//                        
+//                        return SharingFile.init(value: value, thumbnail: nil, duration: $0.duration, type: $0.type)
+//                    }
+//                    latestSharing = sharedMediaFiles
+//                    if(setInitialData) {
+//                        initialSharing = latestSharing
+//                    }
+//                    eventSinkMedia?(toJson(data: latestSharing))
+//                }
+//            } else if url.fragment == "file" {
+//                if let key = url.host?.components(separatedBy: "=").last,
+//                   let json = userDefaults?.object(forKey: key) as? Data {
+//                    let sharedArray = decode(data: json)
+//                    let sharedMediaFiles: [SharingFile] = sharedArray.compactMap{
+//                        guard getAbsolutePath(for: $0.value) != nil else {
+//                            return nil
+//                        }
+//                        return SharingFile.init(value: $0.value,
+//                                                thumbnail: nil, duration: nil,
+//                                                type: $0.type)
+//                    }
+//                    latestSharing = sharedMediaFiles
+//                    if(setInitialData) {
+//                        initialSharing = latestSharing
+//                    }
+//                    eventSinkMedia?(toJson(data: latestSharing))
+//                }
+//            } else if url.fragment == "url" {
+//                if let key = url.host?.components(separatedBy: "=").last,
+//                   let sharedArray = userDefaults?.object(forKey: key) as? [String] {
+//                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type:  SharingFileType.url)]
+//                    if(setInitialData) {
+//                        initialSharing = latestSharing
+//                    }
+//                    eventSinkMedia?(toJson(data: latestSharing))
+//                }
+//            } else if url.fragment == "text" {
+//                if let key = url.host?.components(separatedBy: "=").last,
+//                   let sharedArray = userDefaults?.object(forKey: key) as? [String] {
+//                    latestSharing = [SharingFile.init(value:  sharedArray.joined(separator: ","), thumbnail: nil, duration: nil, type: SharingFileType.text)]
+//                    if(setInitialData) {
+//                        initialSharing = latestSharing
+//                    }
+//                    eventSinkMedia?(toJson(data: latestSharing))
+//                }
+//            } else {
+//                latestSharing = [SharingFile.init(value: url.absoluteString, thumbnail: nil, duration: nil, type: SharingFileType.text)]
+//
+//                if(setInitialData) {
+//                    initialSharing = latestSharing
+//                }
+//                eventSinkMedia?(latestSharing)
+//            }
+//            return true
+//        }
+//        latestSharing = nil
+//        return false
+//    }
     
     
     public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -216,15 +257,21 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
         return nil;
     }
     
-    private func getAbsolutePath(for identifier: String) -> String? {
+    private func getAbsolutePath(for identifier: String?) -> String? {
+        guard let identifier else {
+                  return nil
+              }
+        
         if (identifier.starts(with: "file://") || identifier.starts(with: "/var/mobile/Media") || identifier.starts(with: "/private/var/mobile")) {
             return identifier.replacingOccurrences(of: "file://", with: "")
         }
-        let phAsset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: .none).firstObject
-        if(phAsset == nil) {
-            return nil
-        }
-        let (url, _) = getFullSizeImageURLAndOrientation(for: phAsset!)
+        guard let phAsset = PHAsset.fetchAssets(
+                 withLocalIdentifiers: [identifier],
+                 options: .none).firstObject else {
+                 return nil
+             }
+        
+        let (url, _) = getFullSizeImageURLAndOrientation(for: phAsset)
         return url
     }
     

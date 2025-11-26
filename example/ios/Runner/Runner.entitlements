@@ -6,5 +6,9 @@
 	<array>
 		<string>group.com.techind.flutterSharingIntentExample</string>
 	</array>
+<!--    <key>com.apple.developer.associated-domains</key>-->
+<!--        <array>-->
+<!--            <string>applinks:example.com</string>-->
+<!--        </array>-->
 </dict>
 </plist>

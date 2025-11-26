@@ -2,7 +2,7 @@ import UIKit
 import flutter_sharing_intent
 import Flutter
 
-@UIApplicationMain
+@main
 @objc class AppDelegate: FlutterAppDelegate {
   override func application(
     _ application: UIApplication,
