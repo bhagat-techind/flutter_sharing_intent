@@ -39,6 +39,8 @@ android/app/src/main/manifest.xml
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="{YOUR_PACKAGE_NAME}">
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
 .....
 
   <application

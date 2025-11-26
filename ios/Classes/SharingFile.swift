@@ -7,27 +7,35 @@
 
 class SharingFile: Codable {
     var value: String
+    var mimeType: String?
     var thumbnail: String?; // video thumbnail
     var duration: Int?; // video duration in milliseconds
     var type: SharingFileType;
+    var message: String? // post message
 
     enum CodingKeys: String, CodingKey {
         case value
+        case mimeType
         case thumbnail
         case duration
         case type
+        case message
     }
     
-    init(value: String, thumbnail: String?, duration: Int?, type: SharingFileType) {
+    init(value: String, mimeType: String? = nil, thumbnail: String?, duration: Int?,
+         type: SharingFileType, message: String?=nil) {
         self.value = value
+        self.mimeType = mimeType
         self.thumbnail = thumbnail
         self.duration = duration
         self.type = type
+        self.message = message
     }
     
     // Debug method to print out SharedMediaFile details in the console
     func toString() {
-        print("[SharingFile] \n\tvalue: \(self.value)\n\tthumbnail: \(self.thumbnail ?? "--" )\n\tduration: \(self.duration ?? 0)\n\ttype: \(self.type)")
+        print("[SharingFile] \n\tvalue: \(self.value)\n\tthumbnail: \(self.thumbnail ?? "--" )\n\tduration: \(self.duration ?? 0)\n\ttype: \(self.type)\n\tmimeType: \(String(describing: self.mimeType))\n\tmessage: \(String(describing: self.message))")
     }
 }
+
 

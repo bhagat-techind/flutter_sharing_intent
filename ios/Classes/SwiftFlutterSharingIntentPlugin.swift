@@ -2,10 +2,15 @@ import Flutter
 import Photos
 import UIKit
 
+public let kSchemePrefix = "SharingMedia"
+public let kUserDefaultsKey = "SharingKey"
+public let kUserDefaultsMessageKey = "SharingMessageKey"
+public let kAppGroupIdKey = "AppGroupId"
+public let kAppChannel = "flutter_sharing_intent"
+
 public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, FlutterPlugin {
-    
-    static let kEventsChannelMedia = "flutter_sharing_intent/events-sharing";
-    private var customSchemePrefix = "SharingMedia";
+    static let kMessagesChannel = "\(kAppChannel)/messages"
+    static let kEventsChannelMedia = "\(kAppChannel)/events-sharing";
     
     private var initialSharing: [SharingFile]? = nil
     private var latestSharing: [SharingFile]? = nil
@@ -19,7 +24,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
     
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let channel = FlutterMethodChannel(name: "flutter_sharing_intent",binaryMessenger:registrar.messenger())
+        let channel = FlutterMethodChannel(name: kAppChannel,binaryMessenger:registrar.messenger())
 
         registrar.addMethodCallDelegate(instance, channel: channel)
 
@@ -28,7 +33,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
 
         registrar.addApplicationDelegate(instance)
-        registrar.addMethodCallDelegate(instance, channel: channel)
+        // registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
     //  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -59,7 +64,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     // By Adding bundle id to prefix, we will ensure that the correct app will be openned
     public func hasSameSchemePrefix(url: URL?) -> Bool {
         if let url = url, let appDomain = Bundle.main.bundleIdentifier {
-            return url.absoluteString.hasPrefix("\(self.customSchemePrefix)-\(appDomain)")
+            return url.absoluteString.hasPrefix("\(kSchemePrefix)-\(appDomain)")
         }
         return false
     }
@@ -121,8 +126,12 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
         if let url = url {
-            let appGroupId = (Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
+            let appGroupId = (Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String) ?? "group.\(Bundle.main.bundleIdentifier!)"
             let userDefaults = UserDefaults(suiteName: appGroupId)
+            let message = userDefaults?.string(forKey: kUserDefaultsMessageKey)
+            if let json = userDefaults?.object(forKey: kUserDefaultsKey) as? Data {
+                print("SwiftFlutterSharingIntentPlugin : [handleUrl] \(json)")
+            }
             if url.fragment == "media" {
                 if let key = url.host?.components(separatedBy: "=").last,
                    let json = userDefaults?.object(forKey: key) as? Data {
@@ -216,15 +225,21 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
         return nil;
     }
     
-    private func getAbsolutePath(for identifier: String) -> String? {
+    private func getAbsolutePath(for identifier: String?) -> String? {
+        guard let identifier else {
+                  return nil
+              }
+        
         if (identifier.starts(with: "file://") || identifier.starts(with: "/var/mobile/Media") || identifier.starts(with: "/private/var/mobile")) {
             return identifier.replacingOccurrences(of: "file://", with: "")
         }
-        let phAsset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: .none).firstObject
-        if(phAsset == nil) {
-            return nil
-        }
-        let (url, _) = getFullSizeImageURLAndOrientation(for: phAsset!)
+        guard let phAsset = PHAsset.fetchAssets(
+                 withLocalIdentifiers: [identifier],
+                 options: .none).firstObject else {
+                 return nil
+             }
+        
+        let (url, _) = getFullSizeImageURLAndOrientation(for: phAsset)
         return url
     }
     

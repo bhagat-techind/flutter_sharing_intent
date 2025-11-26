@@ -27,7 +27,7 @@ class _MyAppState extends State<MyApp> {
     super.initState();
   }
 
-  initSharingListener() {
+  void initSharingListener() {
     // For sharing images coming from outside the app while the app is in the memory
     _intentDataStreamSubscription = FlutterSharingIntent.instance
         .getMediaStream()
