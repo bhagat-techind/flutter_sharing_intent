@@ -36,6 +36,7 @@ target 'Runner' do
   # Share Extension is name of Extension which you created which is in this case 'Share Extension'
   target 'Share Extension' do
     inherit! :search_paths
+    pod 'flutter_sharing_intent/SharedCore', :path => '.symlinks/plugins/flutter_sharing_intent/ios'
   end
 
 end

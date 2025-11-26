@@ -251,7 +251,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
         loadIds()
 //        let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier):share"
                 let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier)://dataUrl=\(kUserDefaultsKey)"
-        guard let url = URL(string: raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw) else { completeAndExit(); return }
+        guard let url = URL(string: raw.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed) ?? raw) else { completeAndExit(); return }
 
         var responder: UIResponder? = self
         if #available(iOS 18.0, *) {

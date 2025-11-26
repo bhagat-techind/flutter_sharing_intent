@@ -14,7 +14,19 @@ A new Flutter project.
   s.author           = { 'techind' => 'techind@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
-  s.public_header_files = 'Classes/**/*.h'
+#   s.public_header_files = 'Classes/**/*.h'
+  s.exclude_files = 'Classes/Shared/**/*'
+  s.subspec 'SharedCore' do |core|
+    core.source_files = 'Classes/Shared/**/*.{swift}'
+    core.public_header_files = 'Classes/Shared/**/*.h'
+    core.frameworks = 'MobileCoreServices', 'UIKit', 'AVFoundation'
+    core.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+#       core.source_files = [
+#         'Classes/Shared/**/*.{swift,h,m}',
+#         'Classes/SharedConstants.swift'
+#       ]
+#     core.swift_version = '5.0'
+  end
   s.dependency 'Flutter'
   s.platform = :ios, '9.0'
 
