@@ -135,6 +135,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
             if !self.sharedMedia.isEmpty {
                 self.saveAndRedirect()
             } else {
+                print("FSIShare: No shared media → stopping.")
                 self.completeAndExit()
             }
         }
@@ -148,9 +149,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
             sharedMedia.append(SharingFile(value: url.absoluteString, thumbnail: nil, duration: nil, type: .url))
         }
 
-        if index == total - 1 {
-            saveAndRedirect()
-        }
+//        if index == total - 1 {
+//            saveAndRedirect()
+//        }
     }
 
     private func handleUrlItem(data: NSSecureCoding?, index: Int, total: Int) {
@@ -160,9 +161,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
             sharedMedia.append(SharingFile(value: s, thumbnail: nil, duration: nil, type: .text))
         }
 
-        if index == total - 1 {
-            saveAndRedirect()
-        }
+//        if index == total - 1 {
+//            saveAndRedirect()
+//        }
     }
 
     private func handleImageItem(data: NSSecureCoding?, index: Int, total: Int) {
@@ -184,9 +185,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
             }
         }
 
-        if index == total - 1 {
-            saveAndRedirect()
-        }
+//        if index == total - 1 {
+//            saveAndRedirect()
+//        }
     }
 
     private func handleVideoItem(data: NSSecureCoding?, index: Int, total: Int) {
@@ -201,9 +202,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
             }
         }
 
-        if index == total - 1 {
-            saveAndRedirect()
-        }
+//        if index == total - 1 {
+//            saveAndRedirect()
+//        }
     }
 
     private func handleFileItem(data: NSSecureCoding?, index: Int, total: Int) {
@@ -216,9 +217,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
             }
         }
 
-        if index == total - 1 {
-            saveAndRedirect()
-        }
+//        if index == total - 1 {
+//            saveAndRedirect()
+//        }
     }
 
     // MARK: - Helpers: write temp image
@@ -256,7 +257,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
         // kept for compatibility (RSI style)
         loadIds()
 //        let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier):share"
-                let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier)://dataUrl=\(kUserDefaultsKey)"
+        let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier)://dataUrl=\(kUserDefaultsKey)"
         guard let url = URL(string: raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw) else { completeAndExit(); return }
 
         var responder: UIResponder? = self

@@ -129,9 +129,14 @@ Add the following intent filters to your [android/app/src/main/AndroidManifest.x
 
 ## IOS
 
-#### 1. Add the following
+#### 1. Create Share Extension
 
-#### 2. Replace your [ios/Info.plist](./example/ios/Info.plist) with the following:
+- Using Xcode, go to File/New/Target and Choose "Share Extension".
+- Give it a name, i.e., "Share Extension".
+
+Make sure the deployment target for Runner.app and the share extension is the same.
+
+#### 2. Replace your [ios/Runner/Info.plist](./example/ios/Runner/Info.plist) with the following:
 ios/Runner/info.plist
 
 ```xml
@@ -177,7 +182,7 @@ end
 
 * Go to `Signing & Capabilities` tab and add App Groups capability in **BOTH** Targets: `Runner` and `Share Extension`
 * Add a new container with the name of your choice. For example `group.MyContainer` in the example project its `group.com.techind.flutterSharingIntentExample`
-* Add User-defined(`Build Settings -> +`) string `CUSTOM_GROUP_ID` in **BOTH** Targets: `Runner` and `Share Extension` and set value to group id created above. You can use different group ids depends on your flavor schemes
+* Add User-Defined(`Build Settings -> +`) string `CUSTOM_GROUP_ID` in **BOTH** Targets: `Runner` and `Share Extension` and set value to group id created above. You can use different group ids depends on your flavor schemes
 
 
 ##### Make sure the deployment target for Runner.app and the share extension is the same.
@@ -187,6 +192,10 @@ end
 
 ```xml
 ....
+    <key>AppGroupId</key>
+    <string>$(CUSTOM_GROUP_ID)</string>
+    <key>CFBundleVersion</key>
+    <string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSExtension</key>
     <dict>
     <key>NSExtensionAttributes</key>
@@ -227,22 +236,32 @@ end
 ```
 
 
-#### 5. Add following code to [ios/Runner/Runner.entitlements](./example/ios/Runner/Runner.entitlements):
+[//]: # (#### 5. Add following code to [ios/Runner/Runner.entitlements]&#40;./example/ios/Runner/Runner.entitlements&#41;:)
 
+[//]: # ()
+[//]: # ()
+[//]: # (```xml)
 
-```xml
-....
-    <!--TODO:  Add this tag-->
-    <key>com.apple.security.application-groups</key>
-    <array>
-    <string>group.com.techind.flutterSharingIntentExample</string>
-    </array>
-....
-```
+[//]: # (....)
 
-Here `group.com.techind.flutterSharingIntentExample` is the App Group ID created in previous step.
+[//]: # (    <!--TODO:  Add this tag-->)
 
-#### 6. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift):
+[//]: # (    <key>com.apple.security.application-groups</key>)
+
+[//]: # (    <array>)
+
+[//]: # (    <string>group.com.techind.flutterSharingIntentExample</string>)
+
+[//]: # (    </array>)
+
+[//]: # (....)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (Here `group.com.techind.flutterSharingIntentExample` is the App Group ID created in previous step.)
+
+#### 5. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift):
 
 
 ##### Make your `ShareViewController` [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `FSIShareViewController`:

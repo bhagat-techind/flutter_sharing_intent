@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.0.3
+* Update README.md iOS setup instructions
+* Fixed iOS issues -  #65, #55, #41, #4
+
+
 ## 2.0.2
 * Update README.md iOS setup instructions
 
