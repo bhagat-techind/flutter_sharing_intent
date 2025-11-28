@@ -25,7 +25,7 @@ Pod::Spec.new do |s|
 #     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386'
   }
 
-  s.static_framework = false
+  s.static_framework = true
 
   # Add resource bundle for Apple manifest policy
   s.resource_bundle = {

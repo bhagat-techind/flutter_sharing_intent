@@ -20,34 +20,34 @@ open class FSIShareViewController: SLComposeServiceViewController {
     // MARK: - Config
     private(set) var hostAppBundleIdentifier: String = ""
     private(set) var appGroupId: String = ""
-
+    
     // Results
     private var sharedMedia: [SharingFile] = []
-
+    
     // Debug
     private let debugLogs = false
-
+    
     // MARK: - Lifecycle
     open override func viewDidLoad() {
         super.viewDidLoad()
         loadIds()
     }
-
+    
     open override func isContentValid() -> Bool {
         return true
     }
-
+    
     open override func didSelectPost() {
         // If the UI Post is used, save and redirect using contentText
         saveAndRedirect(message: contentText)
     }
-
+    
     open override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         // Process attachments automatically on appear like original FSI
         processAttachments()
     }
-
+    
     // MARK: - Load Ids
     private func loadIds() {
         let shareExtId = Bundle.main.bundleIdentifier ?? ""
@@ -60,62 +60,74 @@ open class FSIShareViewController: SLComposeServiceViewController {
         appGroupId = custom ?? "group.\(hostAppBundleIdentifier)"
         log("loaded host=\(hostAppBundleIdentifier) group=\(appGroupId)")
     }
-
+    
     // MARK: - Attachment processing (clean RSI style, preserve FSI features)
     private func processAttachments() {
         guard let content = extensionContext?.inputItems.first as? NSExtensionItem else {
             completeAndExit()
             return
         }
-
+        
         guard let attachments = content.attachments, !attachments.isEmpty else {
             completeAndExit()
             return
         }
-
+        
         // Use DispatchGroup to wait for async loads
         let group = DispatchGroup()
         for (index, provider) in attachments.enumerated() {
             group.enter()
             // Try all SharedMediaType options similar to RSI but preserve explicit FSI order
-            if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
-                provider.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { [weak self] data, error in
+            if provider.isImage {
+                provider.loadItem(forTypeIdentifier: UType.image, options: nil) { [weak self] data, error in
                     defer { group.leave() }
                     guard let self = self, error == nil else { self?.dismissWithError(); return }
                     self.handleImageItem(data: data, index: index, total: attachments.count)
                 }
                 continue
             }
-
-            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-                provider.loadItem(forTypeIdentifier: UTType.movie.identifier, options: nil) { [weak self] data, error in
+            
+            if provider.isMovie {
+                provider.loadItem(forTypeIdentifier: UType.movie, options: nil) { [weak self] data, error in
                     defer { group.leave() }
                     guard let self = self, error == nil else { self?.dismissWithError(); return }
                     self.handleVideoItem(data: data, index: index, total: attachments.count)
                 }
                 continue
             }
-
-            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { [weak self] data, error in
+            
+            if provider.isFile {
+                provider.loadItem(forTypeIdentifier: UType.fileURL, options: nil) { [weak self] data, error in
                     defer { group.leave() }
                     guard let self = self, error == nil else { self?.dismissWithError(); return }
                     self.handleFileItem(data: data, index: index, total: attachments.count)
                 }
                 continue
             }
-
-            if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { [weak self] data, error in
+            
+            if provider.isData {
+                provider.loadItem(forTypeIdentifier: UType.data, options: nil) { [weak self] data, error in
+                    defer { group.leave() }
+                    guard let self = self, error == nil else { self?.dismissWithError(); return }
+                    self.handleFileItem(data: data, index: index, total: attachments.count)
+                }
+                continue
+            }
+                    
+            
+            if provider.isURL {
+                provider.loadItem(forTypeIdentifier: UType.url, options: nil) { [weak self] data, error in
                     defer { group.leave() }
                     guard let self = self, error == nil else { self?.dismissWithError(); return }
                     self.handleUrlItem(data: data, index: index, total: attachments.count)
                 }
                 continue
             }
-
-            if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) || provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
-                let id = provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) ? UTType.plainText.identifier : UTType.text.identifier
+            
+            if provider.isText {
+                let id = provider.hasItemConformingToTypeIdentifier(UType.plainText)
+                ? UType.plainText
+                : UType.text
                 provider.loadItem(forTypeIdentifier: id, options: nil) { [weak self] data, error in
                     defer { group.leave() }
                     guard let self = self, error == nil else { self?.dismissWithError(); return }
@@ -123,12 +135,22 @@ open class FSIShareViewController: SLComposeServiceViewController {
                 }
                 continue
             }
+            
+            if provider.isItem {
+                provider.loadItem(forTypeIdentifier: UType.item, options: nil) { [weak self] data, error in
+                    defer { group.leave() }
+                    guard let self = self, error == nil else { self?.dismissWithError(); return }
+                    self.handleFileItem(data: data, index: index, total: attachments.count)
+                }
+                continue
+            }
+                    
+            log("Unknown provider type: \(provider.registeredTypeIdentifiers)")
 
-            log("Unknown type: just leave")
             // Unknown type: just leave
             group.leave()
         }
-
+        
         group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
             // if we have media -> media, else fallback to complete
@@ -140,7 +162,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
             }
         }
     }
-
+    
     // MARK: - Individual handlers (preserve FSI behavior)
     private func handleTextItem(data: NSSecureCoding?, index: Int, total: Int) {
         if let s = data as? String {
@@ -148,24 +170,18 @@ open class FSIShareViewController: SLComposeServiceViewController {
         } else if let url = data as? URL {
             sharedMedia.append(SharingFile(value: url.absoluteString, thumbnail: nil, duration: nil, type: .url))
         }
-
-//        if index == total - 1 {
-//            saveAndRedirect()
-//        }
+        
     }
-
+    
     private func handleUrlItem(data: NSSecureCoding?, index: Int, total: Int) {
         if let url = data as? URL {
             sharedMedia.append(SharingFile(value: url.absoluteString, thumbnail: nil, duration: nil, type: .url))
         } else if let s = data as? String {
             sharedMedia.append(SharingFile(value: s, thumbnail: nil, duration: nil, type: .text))
         }
-
-//        if index == total - 1 {
-//            saveAndRedirect()
-//        }
+        
     }
-
+    
     private func handleImageItem(data: NSSecureCoding?, index: Int, total: Int) {
         // data can be URL, UIImage, or Data
         if let url = data as? URL {
@@ -184,12 +200,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
                 sharedMedia.append(saved)
             }
         }
-
-//        if index == total - 1 {
-//            saveAndRedirect()
-//        }
+        
     }
-
+    
     private func handleVideoItem(data: NSSecureCoding?, index: Int, total: Int) {
         if let url = data as? URL {
             let filename = getFileName(from: url, type: .video)
@@ -201,12 +214,9 @@ open class FSIShareViewController: SLComposeServiceViewController {
                 }
             }
         }
-
-//        if index == total - 1 {
-//            saveAndRedirect()
-//        }
+        
     }
-
+    
     private func handleFileItem(data: NSSecureCoding?, index: Int, total: Int) {
         if let url = data as? URL {
             let filename = getFileName(from: url, type: .file)
@@ -216,12 +226,19 @@ open class FSIShareViewController: SLComposeServiceViewController {
                 }
             }
         }
-
-//        if index == total - 1 {
-//            saveAndRedirect()
-//        }
+        else if let raw = data as? Data {
+            let filename = "File_\(UUID().uuidString)"
+            if let dst = containerURL()?.appendingPathComponent(filename) {
+                do {
+                    try raw.write(to: dst)
+                    sharedMedia.append(SharingFile(value: dst.absoluteString, mimeType: "application/octet-stream", thumbnail: nil, duration: nil, type: .file))
+                } catch {}
+            }
+        }
+        
+        
     }
-
+    
     // MARK: - Helpers: write temp image
     private func writeTempImage(_ image: UIImage) -> SharingFile? {
         guard let container = containerURL() else { return nil }
@@ -238,8 +255,8 @@ open class FSIShareViewController: SLComposeServiceViewController {
         }
         return nil
     }
-
-
+    
+    
     private func saveAndRedirect(message: String? = nil) {
         let ud = UserDefaults(suiteName: appGroupId)
         if !sharedMedia.isEmpty {
@@ -251,15 +268,15 @@ open class FSIShareViewController: SLComposeServiceViewController {
         ud?.synchronize()
         redirectToHostApp()
     }
-
-
+    
+    
     private func redirectToHostApp() {
         // kept for compatibility (RSI style)
         loadIds()
-//        let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier):share"
+        //        let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier):share"
         let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier)://dataUrl=\(kUserDefaultsKey)"
         guard let url = URL(string: raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw) else { completeAndExit(); return }
-
+        
         var responder: UIResponder? = self
         if #available(iOS 18.0, *) {
             while responder != nil {
@@ -275,7 +292,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
         }
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
-
+    
     // MARK: - File / thumbnail / metadata helpers
     func getExtension(from url: URL, type: SharingFileType) -> String {
         let parts = url.lastPathComponent.components(separatedBy: ".")
@@ -292,13 +309,13 @@ open class FSIShareViewController: SLComposeServiceViewController {
         }
         return ex ?? "bin"
     }
-
+    
     func getFileName(from url: URL, type: SharingFileType) -> String {
         var name = url.lastPathComponent
         if name.isEmpty { name = UUID().uuidString + "." + getExtension(from: url, type: type) }
         return name
     }
-
+    
     func copyFile(at srcURL: URL, to dstURL: URL) -> Bool {
         do {
             if FileManager.default.fileExists(atPath: dstURL.path) { try FileManager.default.removeItem(at: dstURL) }
@@ -309,20 +326,20 @@ open class FSIShareViewController: SLComposeServiceViewController {
             return false
         }
     }
-
+    
     private func getSharedMediaFile(forVideo: URL) -> SharingFile? {
         let asset = AVAsset(url: forVideo)
         let duration = (CMTimeGetSeconds(asset.duration) * 1000).rounded()
         let thumbnailPath = getThumbnailPath(for: forVideo)
-
+        
         if FileManager.default.fileExists(atPath: thumbnailPath.path) {
             return SharingFile(value: forVideo.absoluteString, mimeType: forVideo.mimeType(), thumbnail: thumbnailPath.absoluteString, duration: Int(duration), type: .video)
         }
-
+        
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         gen.maximumSize = CGSize(width: 360, height: 360)
-
+        
         // Use first second or zero
         let time = CMTime(seconds: min(1.0, CMTimeGetSeconds(asset.duration)), preferredTimescale: 600)
         do {
@@ -334,25 +351,25 @@ open class FSIShareViewController: SLComposeServiceViewController {
         } catch {
             log("getSharedMediaFile thumbnail error: \(error)")
         }
-
+        
         // fallback
         return SharingFile(value: forVideo.absoluteString, mimeType: forVideo.mimeType(), thumbnail: nil, duration: Int(duration), type: .video)
     }
-
+    
     private func getThumbnailPath(for url: URL) -> URL {
         guard let container = containerURL() else { fatalError("App group not configured or missing") }
         let fileName = Data(url.lastPathComponent.utf8).base64EncodedString().replacingOccurrences(of: "=", with: "")
         return container.appendingPathComponent("\(fileName).jpg")
     }
-
+    
     private func containerURL() -> URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)
     }
-
+    
     private func completeAndExit() {
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
-
+    
     private func dismissWithError() {
         log("[ERROR] Error loading data!")
         let alert = UIAlertController(title: "Error", message: "Error loading data", preferredStyle: .alert)
@@ -360,7 +377,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
         present(alert, animated: true, completion: nil)
         extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
     }
-
+    
     private func writeTempFile(_ image: UIImage, to dstURL: URL) -> Bool {
         do {
             if FileManager.default.fileExists(atPath: dstURL.path) { try FileManager.default.removeItem(at: dstURL) }
@@ -372,24 +389,15 @@ open class FSIShareViewController: SLComposeServiceViewController {
             return false
         }
     }
-
+    
     private func saveToUserDefaults(data: [SharingFile]) {
         let ud = UserDefaults(suiteName: appGroupId)
         if let enc = try? JSONEncoder().encode(data) { ud?.set(enc, forKey: kUserDefaultsKey); ud?.synchronize() }
     }
-
+    
     // MARK: - Logging
     private func log(_ s: String) { if debugLogs { print("[FSIShareVC] \(s)") } }
-
-//    // MARK: - Models
-//    enum RedirectType: String {
-//        case media
-//        case text
-//        case file
-//        case url
-//    }
-
-   
+    
 }
 
 // MARK: - Extensions
@@ -407,11 +415,18 @@ extension URL {
 }
 
 extension NSItemProvider {
-    var isImage: Bool { return hasItemConformingToTypeIdentifier(UTType.image.identifier) }
-    var isMovie: Bool { return hasItemConformingToTypeIdentifier(UTType.movie.identifier) }
-    var isText: Bool { return hasItemConformingToTypeIdentifier(UTType.text.identifier) }
-    var isURL: Bool { return hasItemConformingToTypeIdentifier(UTType.url.identifier) }
-    var isFile: Bool { return hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+    var isImage: Bool { return hasItemConformingToTypeIdentifier(UType.image) }
+    var isMovie: Bool { return hasItemConformingToTypeIdentifier(UType.movie) }
+    // var isText: Bool { return hasItemConformingToTypeIdentifier(UType.text) }
+    var isText: Bool {
+        hasItemConformingToTypeIdentifier(UType.text) ||
+        hasItemConformingToTypeIdentifier(UType.plainText)
+    }
+    var isURL: Bool { return hasItemConformingToTypeIdentifier(UType.url) }
+    var isFile: Bool { return hasItemConformingToTypeIdentifier(UType.fileURL) }
+    var isData:Bool { return hasItemConformingToTypeIdentifier(UType.data) }
+    var isItem: Bool { hasItemConformingToTypeIdentifier(UType.item) }
+
 }
 
 extension Array {
@@ -426,7 +441,7 @@ class SharingFile: Codable {
     var duration: Int?; // video duration in milliseconds
     var type: SharingFileType;
     var message: String? // post message
-
+    
     enum CodingKeys: String, CodingKey {
         case value
         case mimeType
@@ -435,7 +450,7 @@ class SharingFile: Codable {
         case type
         case message
     }
-
+    
     init(value: String, mimeType: String? = nil, thumbnail: String?, duration: Int?,
          type: SharingFileType, message: String?=nil) {
         self.value = value
@@ -445,7 +460,7 @@ class SharingFile: Codable {
         self.type = type
         self.message = message
     }
-
+    
     // Debug method to print out SharedMediaFile details in the console
     func toString() {
         print("[SharingFile] \n\tvalue: \(self.value)\n\tthumbnail: \(self.thumbnail ?? "--" )\n\tduration: \(self.duration ?? 0)\n\ttype: \(self.type)\n\tmimeType: \(String(describing: self.mimeType))\n\tmessage: \(String(describing: self.message))")
@@ -459,37 +474,106 @@ enum SharingFileType: Int, Codable {
     case image
     case video
     case file
+    
+//    public var toUTTypeIdentifier: String {
+//        if #available(iOS 14.0, *) {
+//            switch self {
+//            case .image:
+//                return UTType.image.identifier
+//            case .video:
+//                return UTType.movie.identifier
+//            case .text:
+//                return UTType.text.identifier
+//                //         case .audio:
+//                //             return UTType.audio.identifier
+//            case .file:
+//                return UTType.fileURL.identifier
+//            case .url:
+//                return UTType.url.identifier
+//            }
+//        }
+//        switch self {
+//        case .image:
+//            return "public.image"
+//        case .video:
+//            return "public.movie"
+//        case .text:
+//            return "public.text"
+//            //         case .audio:
+//            //             return "public.audio"
+//        case .file:
+//            return "public.file-url"
+//        case .url:
+//            return "public.url"
+//        }
+//    }
+}
 
-    public var toUTTypeIdentifier: String {
+// Unified UTType → works on iOS 11–18
+enum UType {
+    static var image: String {
         if #available(iOS 14.0, *) {
-            switch self {
-            case .image:
-                return UTType.image.identifier
-            case .video:
-                return UTType.movie.identifier
-            case .text:
-                return UTType.text.identifier
-                //         case .audio:
-                //             return UTType.audio.identifier
-            case .file:
-                return UTType.fileURL.identifier
-            case .url:
-                return UTType.url.identifier
-            }
+            return UTType.image.identifier
+        } else {
+            return kUTTypeImage as String   // old API
         }
-        switch self {
-        case .image:
-            return "public.image"
-        case .video:
-            return "public.movie"
-        case .text:
-            return "public.text"
-            //         case .audio:
-            //             return "public.audio"
-        case .file:
-            return "public.file-url"
-        case .url:
-            return "public.url"
+    }
+    
+    static var movie: String {
+        if #available(iOS 14.0, *) {
+            return UTType.movie.identifier
+        } else {
+            return kUTTypeMovie as String
+        }
+    }
+    
+    
+    static var url: String {
+        if #available(iOS 14.0, *) {
+            return UTType.url.identifier
+        } else {
+            return kUTTypeURL as String
+        }
+    }
+    
+    static var fileURL: String {
+        if #available(iOS 14.0, *) {
+            return UTType.fileURL.identifier
+        } else {
+            return kUTTypeFileURL as String
+        }
+    }
+    
+    static var text: String {
+        if #available(iOS 14.0, *) {
+            return UTType.text.identifier
+        } else {
+            return kUTTypeText as String
+        }
+    }
+    
+    static var plainText: String {
+        if #available(iOS 14.0, *) {
+            return UTType.plainText.identifier
+        } else {
+            return kUTTypePlainText as String
+        }
+    }
+    
+    static var data: String {
+        if #available(iOS 14.0, *) {
+            return UTType.data.identifier
+        } else {
+            return kUTTypeData as String
+        }
+    }
+    
+    static var item: String {
+        if #available(iOS 14.0, *) {
+            return UTType.item.identifier
+        } else {
+            return kUTTypeItem as String
         }
     }
 }
+

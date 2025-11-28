@@ -136,8 +136,7 @@ Add the following intent filters to your [android/app/src/main/AndroidManifest.x
 
 Make sure the deployment target for Runner.app and the share extension is the same.
 
-#### 2. Replace your [ios/Runner/Info.plist](./example/ios/Runner/Info.plist) with the following:
-ios/Runner/info.plist
+#### 2. Update your [ios/Runner/Info.plist](./example/ios/Runner/Info.plist) for the following keys:
 
 ```xml
 ...
@@ -161,7 +160,7 @@ ios/Runner/info.plist
 ```
 
 
-#### 2. Add the following to your [ios/Podfile](./example/ios/Podfile):
+#### 3. Add the following to your [ios/Podfile](./example/ios/Podfile):
 ```ruby
 ...
 target 'Runner' do
@@ -178,7 +177,7 @@ end
 ...
 ```
 
-#### 3. Add Runner and Share Extension in the same group
+#### 4. Add Runner and Share Extension in the same group
 
 * Go to `Signing & Capabilities` tab and add App Groups capability in **BOTH** Targets: `Runner` and `Share Extension`
 * Add a new container with the name of your choice. For example `group.MyContainer` in the example project its `group.com.techind.flutterSharingIntentExample`
@@ -188,7 +187,7 @@ end
 ##### Make sure the deployment target for Runner.app and the share extension is the same.
 
 
-#### 4. Add the following code in [ios/Share Extension/Info.plist](./example/ios/Share%20Extension/Info.plist):
+#### 5. Add the following code in [ios/Share Extension/Info.plist](./example/ios/Share%20Extension/Info.plist):
 
 ```xml
 ....
@@ -261,8 +260,8 @@ end
 [//]: # ()
 [//]: # (Here `group.com.techind.flutterSharingIntentExample` is the App Group ID created in previous step.)
 
-#### 5. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift):
-
+#### 6. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift):
+You can get the file from [here](./example/ios/Share%20Extension/FSIShareViewController.swift)
 
 ##### Make your `ShareViewController` [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `FSIShareViewController`:
 
