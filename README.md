@@ -224,6 +224,10 @@ end
             <!-- To share other files into your app -->
             <key>NSExtensionActivationSupportsFileWithMaxCount</key>
             <integer>10</integer>
+            <!-- To share plain text into your app -->
+            <key>NSExtensionActivationSupportsPlainText</key>
+            <true/>
+          
         </dict>
     </dict>
     <key>NSExtensionMainStoryboard</key>

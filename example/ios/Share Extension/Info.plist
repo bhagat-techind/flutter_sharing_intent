@@ -33,6 +33,9 @@
                 <!-- To share other files into your app -->
                 <key>NSExtensionActivationSupportsFileWithMaxCount</key>
                 <integer>10</integer>
+                
+                <key>NSExtensionActivationSupportsPlainText</key>
+                <true/>
             </dict>
 		</dict>
 		<key>NSExtensionMainStoryboard</key>

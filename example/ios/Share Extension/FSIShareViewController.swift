@@ -38,8 +38,20 @@ open class FSIShareViewController: SLComposeServiceViewController {
     }
     
     open override func didSelectPost() {
+        if self.sharedMedia.isEmpty {
+            if let text = self.contentText, !text.isEmpty {
+                self.sharedMedia.append(
+                    SharingFile(value: text, thumbnail: nil, duration: nil, type: .text)
+                )
+                self.saveAndRedirect(message: text)
+                return
+            }
+            self.completeAndExit()
+        } else {
+            self.saveAndRedirect()
+        }
         // If the UI Post is used, save and redirect using contentText
-        saveAndRedirect(message: contentText)
+//        saveAndRedirect(message: contentText)
     }
     
     open override func viewDidAppear(_ animated: Bool) {
@@ -105,16 +117,6 @@ open class FSIShareViewController: SLComposeServiceViewController {
                 continue
             }
             
-            if provider.isData {
-                provider.loadItem(forTypeIdentifier: UType.data, options: nil) { [weak self] data, error in
-                    defer { group.leave() }
-                    guard let self = self, error == nil else { self?.dismissWithError(); return }
-                    self.handleFileItem(data: data, index: index, total: attachments.count)
-                }
-                continue
-            }
-                    
-            
             if provider.isURL {
                 provider.loadItem(forTypeIdentifier: UType.url, options: nil) { [weak self] data, error in
                     defer { group.leave() }
@@ -132,6 +134,15 @@ open class FSIShareViewController: SLComposeServiceViewController {
                     defer { group.leave() }
                     guard let self = self, error == nil else { self?.dismissWithError(); return }
                     self.handleTextItem(data: data, index: index, total: attachments.count)
+                }
+                continue
+            }
+            
+            if provider.isData {
+                provider.loadItem(forTypeIdentifier: UType.data, options: nil) { [weak self] data, error in
+                    defer { group.leave() }
+                    guard let self = self, error == nil else { self?.dismissWithError(); return }
+                    self.handleFileItem(data: data, index: index, total: attachments.count)
                 }
                 continue
             }
@@ -419,8 +430,7 @@ extension NSItemProvider {
     var isMovie: Bool { return hasItemConformingToTypeIdentifier(UType.movie) }
     // var isText: Bool { return hasItemConformingToTypeIdentifier(UType.text) }
     var isText: Bool {
-        hasItemConformingToTypeIdentifier(UType.text) ||
-        hasItemConformingToTypeIdentifier(UType.plainText)
+        hasItemConformingToTypeIdentifier(UType.plainText) || hasItemConformingToTypeIdentifier(UType.text)
     }
     var isURL: Bool { return hasItemConformingToTypeIdentifier(UType.url) }
     var isFile: Bool { return hasItemConformingToTypeIdentifier(UType.fileURL) }
