@@ -277,6 +277,10 @@ class ShareViewController: FSIShareViewController {
 ```
 
 #### 7. Add following code in your host app AppDelegate file - [ios/Runner/AppDelegate.swift](./example/ios/Runner/AppDelegate.swift)
+> **⚠️ IMPORTANT NOTE**  
+> Do **NOT** replace your existing `AppDelegate.swift` file or remove any existing code.  
+> You should **add the following snippet** to your current file and merge it with your existing logic.  
+> Keep any other URL handling logic you already have (Firebase, uni_links, deep links, etc.).
 
 ```swift
     import flutter_sharing_intent
