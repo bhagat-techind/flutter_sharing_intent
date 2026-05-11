@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.0
+* Add UIScene lifecycle support (Flutter 3.38+). Plugin now registers as a
+  `FlutterSceneLifeCycleDelegate` and mirrors the existing `UIApplicationDelegate`
+  hooks on `scene(_:willConnectTo:options:)`, `scene(_:openURLContexts:)`, and
+  `scene(_:continue:)`. Fixes shared URLs not being received once the host
+  app adopts UISceneDelegate. Closes #6, #74.
+* Bumped minimum Flutter to 3.38.0 and Dart SDK to 3.10.0.
+* See README "UIScene lifecycle (Flutter 3.38+) — host app migration notes"
+  for required host-app changes (AppDelegate refactor + optional router filter).
+
 ## 2.0.4
 * Fixed iOS issue #72
 * Update README.md
