@@ -80,7 +80,15 @@ open class FSIShareViewController: SLComposeServiceViewController {
     open override func isContentValid() -> Bool {
         return true
     }
-    
+
+    // Override this method to return false if you don't want to redirect
+    // to the host app automatically once the attachments are processed.
+    // When false, the share compose UI stays visible and redirection
+    // happens only when the user taps "Post". Default is true.
+    open func shouldAutoRedirect() -> Bool {
+        return true
+    }
+
     open override func didSelectPost() {
         if self.sharedMedia.isEmpty {
             if let text = self.contentText, !text.isEmpty {
@@ -210,7 +218,12 @@ open class FSIShareViewController: SLComposeServiceViewController {
             guard let self = self else { return }
             // if we have media -> media, else fallback to complete
             if !self.sharedMedia.isEmpty {
-                self.saveAndRedirect()
+                // Auto-redirect to the host app unless the subclass opted out.
+                // When opted out, keep the compose UI so the user can add a
+                // message and tap "Post" (handled in didSelectPost).
+                if self.shouldAutoRedirect() {
+                    self.saveAndRedirect()
+                }
             } else {
                 print("FSIShare: No shared media → stopping.")
                 self.completeAndExit()
