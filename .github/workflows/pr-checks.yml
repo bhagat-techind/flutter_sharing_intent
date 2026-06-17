@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write
+  models: read   # Llama + Mistral review via free GitHub Models
 
 jobs:
   test:
@@ -34,29 +34,26 @@ jobs:
           fi
 
   review:
-    name: Claude review
+    name: Multi-AI review
     runs-on: ubuntu-latest
-    # Only review if the subscription token is configured.
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Claude — review the PR diff
-        uses: anthropics/claude-code-action@v1
+
+      - name: Review PR (Llama + Mistral + Gemini + Groq)
+        # Posts independent review comments from each available free AI service.
+        # Llama + Mistral via GitHub Models are always active (built-in token).
+        # Gemini and Groq activate automatically when their secrets are added.
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Allow bot-opened PRs (the nightly auto-fix opens PRs as a bot) to be reviewed.
-          allowed_bots: "*"
-          claude_args: "--model claude-sonnet-4-6"
-          prompt: |
-            Review the changes in this pull request (#${{ github.event.pull_request.number }})
-            for a Flutter plugin with iOS (Swift) and Android (Kotlin) native code.
-            Focus on real correctness bugs, platform-specific issues, leaks, and obvious
-            regressions — not style nitpicks. Be concise.
-            Post the review as a single PR comment using `gh pr comment ${{ github.event.pull_request.number }}`.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 .github/scripts/multi_ai_review.py
 
   notify:
     name: Notify result

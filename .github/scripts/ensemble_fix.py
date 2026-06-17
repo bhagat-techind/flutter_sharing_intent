@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Ensemble auto-fix: two AI coders + a ChatGPT judge + a test-verified loop.
+Ensemble auto-fix: two AI coders + a multi-model free judge + a test-verified loop.
 
   - Coder A : Claude Code (your subscription, agentic — edits files directly)
   - Coder B : Gemini CLI   (free tier, agentic — edits files directly)
-  - Judge   : ChatGPT via GitHub Models (FREE, uses GITHUB_TOKEN, no OpenAI key)
+  - Judge   : Llama-3.3-70B via GitHub Models (FREE, built-in GITHUB_TOKEN, no extra key)
+              + Llama-3.3-70B via Groq         (FREE, optional GROQ_API_KEY — majority vote)
   - Oracle  : `flutter analyze` + `flutter test`  (objective pass/fail)
 
-Each coder fixes the SAME issue independently. ChatGPT judges the two diffs and
-picks the better one (or "none"). The winning diff is applied and run against the
-real test suite. Pass -> open PR. Fail/none -> feed the reason back and loop, up
-to MAX_ITERS. The judge never decides correctness; the tests do.
+Each coder fixes the SAME issue independently. The judge(s) vote on the better diff.
+The winning diff is applied and run against the real test suite. Pass -> open PR.
+Fail -> feed the reason back and loop, up to MAX_ITERS. The judge never decides
+correctness; the tests do.
 
 Required env:
   ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY
@@ -19,10 +20,10 @@ Required env:
   GITHUB_MODELS_TOKEN       - token with `models: read` (Judge); defaults to GITHUB_TOKEN
   GH_TOKEN                  - to open the PR (use a PAT to trigger pr-checks)
 Optional env:
-  MAX_ITERS (default 3), BASE_BRANCH (default main), GPT_MODEL (default openai/gpt-4o)
+  GROQ_API_KEY   - free Groq key (groq.com) for a second independent judge vote
+  MAX_ITERS (default 3), BASE_BRANCH (default main), JUDGE_MODEL
 
 Assumes `claude`, `gemini`, `flutter`, `git`, `gh` are on PATH.
-NOTE: CLI flags / the GitHub Models model id can drift — verify with one manual run.
 """
 import json
 import os
@@ -38,8 +39,9 @@ MAX_ITERS = int(os.environ.get("MAX_ITERS", "3"))
 BASE = os.environ.get("BASE_BRANCH", "main")
 FIX_BRANCH = f"fix/issue-{ISSUE}"
 
-GPT_MODEL = os.environ.get("GPT_MODEL", "openai/gpt-4o")
+JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "meta-llama/Llama-3.3-70B-Instruct")
 MODELS_ENDPOINT = "https://models.github.ai/inference/chat/completions"
+GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
 
 def run(cmd, check=False, env=None, capture=True):
@@ -124,7 +126,24 @@ def solver_pass(label, fn, failure):
     return diff, ok
 
 
-# ---- Judge (ChatGPT via GitHub Models, free) --------------------------------
+# ---- Judge (free AI — majority vote across available judges) ----------------
+
+JUDGE_PROMPT_TEMPLATE = textwrap.dedent("""\
+    You are a senior code reviewer judging two candidate fixes for issue
+    #{issue} ("{title}"). Each candidate is a unified diff.
+
+    CANDIDATE A (Claude) — its own tests {pass_a}:
+    {diff_a}
+
+    CANDIDATE B (Gemini) — its own tests {pass_b}:
+    {diff_b}
+    {failure}
+    Pick the single best one to ship. Prefer correctness and minimal scope.
+    Respond with ONLY a JSON object:
+    {{"winner": "A" | "B" | "none", "reason": "...", "required_changes": "..."}}
+    Use "none" only if BOTH are clearly wrong or empty.
+""")
+
 
 def _extract_json(text):
     text = text.strip()
@@ -135,31 +154,15 @@ def _extract_json(text):
     return text[start:end + 1] if start != -1 else text
 
 
-def gpt_judge(diff_a, pass_a, diff_b, pass_b, failure):
-    """Returns dict {winner: 'A'|'B'|'none', reason, required_changes} or None on error."""
-    token = os.environ.get("GITHUB_MODELS_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
-    prompt = textwrap.dedent(f"""\
-        You are a senior code reviewer judging two candidate fixes for issue
-        #{ISSUE} ("{TITLE}"). Each candidate is a unified diff.
-
-        CANDIDATE A (Claude) — its own tests {'PASSED' if pass_a else 'FAILED'}:
-        {diff_a or '(no changes)'}
-
-        CANDIDATE B (Gemini) — its own tests {'PASSED' if pass_b else 'FAILED'}:
-        {diff_b or '(no changes)'}
-        {failure}
-        Pick the single best one to ship. Prefer correctness and minimal scope.
-        Respond with ONLY a JSON object:
-        {{"winner": "A" | "B" | "none", "reason": "...", "required_changes": "..."}}
-        Use "none" only if BOTH are clearly wrong or empty.
-    """)
+def _call_judge(endpoint, model, token, label, prompt):
+    """Call one judge model. Returns parsed verdict dict or None on error."""
     body = json.dumps({
-        "model": GPT_MODEL,
+        "model": model,
         "temperature": 0.2,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(
-        MODELS_ENDPOINT, data=body,
+        endpoint, data=body,
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -171,11 +174,63 @@ def gpt_judge(diff_a, pass_a, diff_b, pass_b, failure):
             data = json.loads(r.read().decode())
         content = data["choices"][0]["message"]["content"]
         verdict = json.loads(_extract_json(content))
-        print(f"[judge/ChatGPT] winner={verdict.get('winner')} — {verdict.get('reason')}")
+        winner = verdict.get("winner", "?")
+        reason = verdict.get("reason", "")
+        print(f"[judge/{label}] winner={winner} — {reason}")
         return verdict
-    except Exception as e:  # noqa: BLE001
-        print(f"[judge/ChatGPT] error: {e} — falling back to test-based pick")
+    except Exception as e:
+        print(f"[judge/{label}] error: {e}")
         return None
+
+
+def ai_judge(diff_a, pass_a, diff_b, pass_b, failure):
+    """
+    Polls all available free judge models and picks winner by majority.
+    Returns dict {winner, reason} or None if all judges failed.
+    """
+    prompt = JUDGE_PROMPT_TEMPLATE.format(
+        issue=ISSUE, title=TITLE,
+        pass_a="PASSED" if pass_a else "FAILED",
+        diff_a=diff_a or "(no changes)",
+        pass_b="PASSED" if pass_b else "FAILED",
+        diff_b=diff_b or "(no changes)",
+        failure=failure,
+    )
+
+    verdicts = []
+
+    # Judge 1: Llama-3.3-70B via GitHub Models (free, always available via GITHUB_TOKEN)
+    gh_token = os.environ.get("GITHUB_MODELS_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+    if gh_token:
+        v = _call_judge(MODELS_ENDPOINT, JUDGE_MODEL, gh_token, "Llama-3.3 (GitHub Models)", prompt)
+        if v:
+            verdicts.append(v)
+
+    # Judge 2: Llama-3.3-70B via Groq (free tier — add GROQ_API_KEY secret optionally)
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if groq_key:
+        v = _call_judge(GROQ_ENDPOINT, "llama-3.3-70b-versatile", groq_key, "Llama-3.3 (Groq)", prompt)
+        if v:
+            verdicts.append(v)
+
+    if not verdicts:
+        print("[judge] All judges failed — falling back to test-based pick.")
+        return None
+
+    # Majority vote
+    count = {"A": 0, "B": 0, "none": 0}
+    for v in verdicts:
+        count[v.get("winner", "none")] += 1
+    winner = max(count, key=count.get)
+    reasons = [v.get("reason", "") for v in verdicts if v.get("reason")]
+    required = [v.get("required_changes", "") for v in verdicts if v.get("required_changes")]
+    result = {
+        "winner": winner,
+        "reason": " | ".join(reasons),
+        "required_changes": " | ".join(required),
+    }
+    print(f"[judge/majority] winner={winner} ({count}) — {result['reason']}")
+    return result
 
 
 def apply_patch(diff):
@@ -203,11 +258,11 @@ def main():
             failure_note = "Neither coder produced any changes."
             continue
 
-        verdict = gpt_judge(diff_a, pass_a, diff_b, pass_b, fb)
+        verdict = ai_judge(diff_a, pass_a, diff_b, pass_b, fb)
         if verdict is None:
             # Fallback: prefer whichever passed its own tests, else A.
             choice = "A" if (pass_a or not pass_b) else "B"
-            judge_reason = "ChatGPT judge unavailable — picked by own-test result."
+            judge_reason = "Judge unavailable — picked by own-test result."
         else:
             choice = verdict.get("winner", "none")
             judge_reason = verdict.get("reason", "")
@@ -225,7 +280,7 @@ def main():
 
         passed, final_log = flutter_check()
         if passed:
-            return open_pr(draft=False, log=final_log, note=f"Judge (ChatGPT) chose {choice}: {judge_reason}")
+            return open_pr(draft=False, log=final_log, note=f"Judge chose {choice}: {judge_reason}")
         failure_note = final_log[-6000:]
 
     open_pr(draft=True, log=final_log, note=f"Budget exhausted. Last judge note: {judge_reason}")
@@ -235,14 +290,14 @@ def open_pr(draft, log, note):
     run(f"git checkout -B {FIX_BRANCH}", check=True)
     run("git add -A", check=True)
     run('git -c user.name="ensemble-bot" -c user.email="bot@users.noreply.github.com" '
-        f'commit -m "fix: address issue #{ISSUE} (ensemble: Claude+Gemini, ChatGPT-judged)"', check=True)
+        f'commit -m "fix: address issue #{ISSUE} (ensemble: Claude+Gemini, Llama-judged)"', check=True)
     run(f"git push -f origin {FIX_BRANCH}", check=True)
 
     status = "✅ all checks passed" if not draft else "⚠️ checks still FAILING — needs human review"
     body = textwrap.dedent(f"""\
         Closes #{ISSUE}
 
-        Automated ensemble fix — **Coders:** Claude + Gemini · **Judge:** ChatGPT (GitHub Models) · **Oracle:** flutter analyze + test.
+        Automated ensemble fix — **Coders:** Claude + Gemini · **Judge:** Llama-3.3-70B (GitHub Models + Groq, free) · **Oracle:** flutter analyze + test.
         Status: {status}
 
         > {note}

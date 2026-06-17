@@ -1,10 +1,10 @@
 name: Nightly Auto-Fix
 
-# Runs every night at 01:30 IST (= 20:00 UTC). GitHub cron is always UTC.
+# Runs every night at 02:00 IST (= 20:30 UTC). GitHub cron is always UTC.
 # Also runnable on demand from the Actions tab (workflow_dispatch).
 on:
   schedule:
-    - cron: "0 20 * * *"
+    - cron: "30 20 * * *"
   workflow_dispatch:
     inputs:
       issue:
