@@ -20,6 +20,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  models: read   # ChatGPT judge via free GitHub Models
 
 concurrency:
   group: nightly-ensemble
@@ -77,6 +78,8 @@ jobs:
           BASE_BRANCH: main
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # ChatGPT judge via free GitHub Models — uses the built-in token, no OpenAI key.
+          GITHUB_MODELS_TOKEN: ${{ github.token }}
           # PAT so the opened PR triggers pr-checks.yml (falls back to built-in token).
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
         run: python3 .github/scripts/ensemble_fix.py

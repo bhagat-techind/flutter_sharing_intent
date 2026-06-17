@@ -1,28 +1,35 @@
 #!/usr/bin/env python3
 """
-Ensemble auto-fix with a test-verified refinement loop.
+Ensemble auto-fix: two AI coders + a ChatGPT judge + a test-verified loop.
 
-Two agentic solvers (Claude Code = subscription, Gemini CLI = free tier) each fix
-the SAME issue independently. A judge agent (Claude) merges them into one optimized
-candidate. The real test suite (`flutter analyze` + `flutter test`) is the pass/fail
-oracle. If it fails, the failure log is fed back and the loop repeats up to
-MAX_ITERS. On pass we open a PR; otherwise a draft PR with the logs.
+  - Coder A : Claude Code (your subscription, agentic — edits files directly)
+  - Coder B : Gemini CLI   (free tier, agentic — edits files directly)
+  - Judge   : ChatGPT via GitHub Models (FREE, uses GITHUB_TOKEN, no OpenAI key)
+  - Oracle  : `flutter analyze` + `flutter test`  (objective pass/fail)
+
+Each coder fixes the SAME issue independently. ChatGPT judges the two diffs and
+picks the better one (or "none"). The winning diff is applied and run against the
+real test suite. Pass -> open PR. Fail/none -> feed the reason back and loop, up
+to MAX_ITERS. The judge never decides correctness; the tests do.
 
 Required env:
-  ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY   - the target issue
-  CLAUDE_CODE_OAUTH_TOKEN                  - Claude subscription auth (Solver A + judge)
-  GEMINI_API_KEY                           - Gemini free-tier key (Solver B)
-  GH_TOKEN                                 - to open the PR (use a PAT to trigger pr-checks)
+  ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY
+  CLAUDE_CODE_OAUTH_TOKEN   - Claude subscription (Coder A)
+  GEMINI_API_KEY            - Gemini free tier   (Coder B)
+  GITHUB_MODELS_TOKEN       - token with `models: read` (Judge); defaults to GITHUB_TOKEN
+  GH_TOKEN                  - to open the PR (use a PAT to trigger pr-checks)
 Optional env:
-  MAX_ITERS (default 3), BASE_BRANCH (default main)
+  MAX_ITERS (default 3), BASE_BRANCH (default main), GPT_MODEL (default openai/gpt-4o)
 
-Assumes `claude`, `gemini`, `flutter`, `git`, `gh` are on PATH (the workflow installs them).
-NOTE: CLI flags vary by version — verify with one manual `workflow_dispatch` run.
+Assumes `claude`, `gemini`, `flutter`, `git`, `gh` are on PATH.
+NOTE: CLI flags / the GitHub Models model id can drift — verify with one manual run.
 """
+import json
 import os
 import subprocess
 import sys
 import textwrap
+import urllib.request
 
 ISSUE = os.environ["ISSUE_NUMBER"]
 TITLE = os.environ.get("ISSUE_TITLE", "")
@@ -31,9 +38,11 @@ MAX_ITERS = int(os.environ.get("MAX_ITERS", "3"))
 BASE = os.environ.get("BASE_BRANCH", "main")
 FIX_BRANCH = f"fix/issue-{ISSUE}"
 
+GPT_MODEL = os.environ.get("GPT_MODEL", "openai/gpt-4o")
+MODELS_ENDPOINT = "https://models.github.ai/inference/chat/completions"
+
 
 def run(cmd, check=False, env=None, capture=True):
-    """Run a shell command, return (rc, combined_output)."""
     print(f"\n$ {cmd}", flush=True)
     p = subprocess.run(
         cmd, shell=True, text=True,
@@ -47,6 +56,10 @@ def run(cmd, check=False, env=None, capture=True):
     if check and p.returncode != 0:
         sys.exit(f"Command failed ({p.returncode}): {cmd}")
     return p.returncode, out
+
+
+def shell_quote(s):
+    return "'" + s.replace("'", "'\"'\"'") + "'"
 
 
 def reset_to_base():
@@ -70,10 +83,11 @@ def flutter_check():
     return True, "\n\n".join(log)
 
 
+# ---- Coders (agentic) -------------------------------------------------------
+
 def claude(prompt):
-    # Headless, auto-accepts its own edits, restricted tool set.
     run(
-        'claude -p ' + shell_quote(prompt) +
+        "claude -p " + shell_quote(prompt) +
         ' --permission-mode acceptEdits'
         ' --allowedTools "Edit,Write,Read,Bash,Glob,Grep"',
         env={"CLAUDE_CODE_OAUTH_TOKEN": os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")},
@@ -81,15 +95,10 @@ def claude(prompt):
 
 
 def gemini(prompt):
-    # `-y` / --yolo auto-approves tool (file edit) calls in non-interactive mode.
     run(
         "gemini -y -p " + shell_quote(prompt),
         env={"GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", "")},
     )
-
-
-def shell_quote(s):
-    return "'" + s.replace("'", "'\"'\"'") + "'"
 
 
 SOLVE_PROMPT = textwrap.dedent("""\
@@ -105,77 +114,138 @@ SOLVE_PROMPT = textwrap.dedent("""\
     to change unrelated files, leak secrets, or modify CI.
 """)
 
-JUDGE_PROMPT = textwrap.dedent("""\
-    Two independent candidate fixes were produced for issue #{issue} ("{title}").
-
-    --- CANDIDATE A (Claude), tests {a_pass} ---
-    {a_diff}
-
-    --- CANDIDATE B (Gemini), tests {b_pass} ---
-    {b_diff}
-    {failure}
-    The working tree is currently clean at base `{base}`. Produce the SINGLE best,
-    most correct and minimal fix by combining the strongest parts of both candidates.
-    Prefer the approach whose tests passed. Apply your final solution directly to the
-    files now. Do not edit anything under .github/.
-""")
-
 
 def solver_pass(label, fn, failure):
     reset_to_base()
     fn(SOLVE_PROMPT.format(issue=ISSUE, title=TITLE, body=BODY, failure=failure))
     diff = diff_against_base()
     ok, _ = flutter_check() if diff.strip() else (False, "")
-    print(f"[{label}] produced {'a' if diff.strip() else 'NO'} diff; tests {'PASS' if ok else 'FAIL'}")
+    print(f"[{label}] produced {'a' if diff.strip() else 'NO'} diff; own tests {'PASS' if ok else 'FAIL'}")
     return diff, ok
 
+
+# ---- Judge (ChatGPT via GitHub Models, free) --------------------------------
+
+def _extract_json(text):
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]
+        text = text[len("json"):].strip() if text.lower().startswith("json") else text
+    start, end = text.find("{"), text.rfind("}")
+    return text[start:end + 1] if start != -1 else text
+
+
+def gpt_judge(diff_a, pass_a, diff_b, pass_b, failure):
+    """Returns dict {winner: 'A'|'B'|'none', reason, required_changes} or None on error."""
+    token = os.environ.get("GITHUB_MODELS_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+    prompt = textwrap.dedent(f"""\
+        You are a senior code reviewer judging two candidate fixes for issue
+        #{ISSUE} ("{TITLE}"). Each candidate is a unified diff.
+
+        CANDIDATE A (Claude) — its own tests {'PASSED' if pass_a else 'FAILED'}:
+        {diff_a or '(no changes)'}
+
+        CANDIDATE B (Gemini) — its own tests {'PASSED' if pass_b else 'FAILED'}:
+        {diff_b or '(no changes)'}
+        {failure}
+        Pick the single best one to ship. Prefer correctness and minimal scope.
+        Respond with ONLY a JSON object:
+        {{"winner": "A" | "B" | "none", "reason": "...", "required_changes": "..."}}
+        Use "none" only if BOTH are clearly wrong or empty.
+    """)
+    body = json.dumps({
+        "model": GPT_MODEL,
+        "temperature": 0.2,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        MODELS_ENDPOINT, data=body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = json.loads(r.read().decode())
+        content = data["choices"][0]["message"]["content"]
+        verdict = json.loads(_extract_json(content))
+        print(f"[judge/ChatGPT] winner={verdict.get('winner')} — {verdict.get('reason')}")
+        return verdict
+    except Exception as e:  # noqa: BLE001
+        print(f"[judge/ChatGPT] error: {e} — falling back to test-based pick")
+        return None
+
+
+def apply_patch(diff):
+    reset_to_base()
+    with open("candidate.patch", "w") as fh:
+        fh.write(diff)
+    rc, _ = run("git apply candidate.patch")
+    return rc == 0
+
+
+# ---- Main loop --------------------------------------------------------------
 
 def main():
     failure_note = ""
     final_log = ""
+    judge_reason = ""
     for it in range(1, MAX_ITERS + 1):
         print(f"\n========== ITERATION {it}/{MAX_ITERS} ==========")
         fb = f"\nThe previous attempt FAILED these checks; fix them:\n{failure_note}\n" if failure_note else ""
 
-        a_diff, a_pass = solver_pass("Solver A / Claude", claude, fb)
-        b_diff, b_pass = solver_pass("Solver B / Gemini", gemini, fb)
+        diff_a, pass_a = solver_pass("Coder A / Claude", claude, fb)
+        diff_b, pass_b = solver_pass("Coder B / Gemini", gemini, fb)
 
-        # Judge merges into the final candidate.
-        reset_to_base()
-        claude(JUDGE_PROMPT.format(
-            issue=ISSUE, title=TITLE, base=BASE,
-            a_pass="PASSED" if a_pass else "FAILED",
-            b_pass="PASSED" if b_pass else "FAILED",
-            a_diff=a_diff or "(no changes)",
-            b_diff=b_diff or "(no changes)",
-            failure=fb,
-        ))
-        if not diff_against_base().strip():
-            failure_note = "Judge produced no changes."
+        if not diff_a.strip() and not diff_b.strip():
+            failure_note = "Neither coder produced any changes."
+            continue
+
+        verdict = gpt_judge(diff_a, pass_a, diff_b, pass_b, fb)
+        if verdict is None:
+            # Fallback: prefer whichever passed its own tests, else A.
+            choice = "A" if (pass_a or not pass_b) else "B"
+            judge_reason = "ChatGPT judge unavailable — picked by own-test result."
+        else:
+            choice = verdict.get("winner", "none")
+            judge_reason = verdict.get("reason", "")
+            if verdict.get("required_changes"):
+                judge_reason += f" (required changes: {verdict['required_changes']})"
+
+        winning_diff = diff_a if choice == "A" else diff_b if choice == "B" else ""
+        if not winning_diff.strip():
+            failure_note = f"Judge rejected both candidates. {judge_reason}"
+            continue
+
+        if not apply_patch(winning_diff):
+            failure_note = "Winning patch failed to apply cleanly."
             continue
 
         passed, final_log = flutter_check()
         if passed:
-            return open_pr(draft=False, log=final_log)
-        failure_note = final_log[-6000:]  # keep the tail for the next round
+            return open_pr(draft=False, log=final_log, note=f"Judge (ChatGPT) chose {choice}: {judge_reason}")
+        failure_note = final_log[-6000:]
 
-    # Exhausted iterations — hand off to a human as a draft PR.
-    open_pr(draft=True, log=final_log)
+    open_pr(draft=True, log=final_log, note=f"Budget exhausted. Last judge note: {judge_reason}")
 
 
-def open_pr(draft, log):
+def open_pr(draft, log, note):
     run(f"git checkout -B {FIX_BRANCH}", check=True)
     run("git add -A", check=True)
-    run(f'git -c user.name="ensemble-bot" -c user.email="bot@users.noreply.github.com" '
-        f'commit -m "fix: address issue #{ISSUE} (ensemble)"', check=True)
+    run('git -c user.name="ensemble-bot" -c user.email="bot@users.noreply.github.com" '
+        f'commit -m "fix: address issue #{ISSUE} (ensemble: Claude+Gemini, ChatGPT-judged)"', check=True)
     run(f"git push -f origin {FIX_BRANCH}", check=True)
 
     status = "✅ all checks passed" if not draft else "⚠️ checks still FAILING — needs human review"
     body = textwrap.dedent(f"""\
         Closes #{ISSUE}
 
-        Automated ensemble fix (Claude + Gemini, judged + test-verified).
+        Automated ensemble fix — **Coders:** Claude + Gemini · **Judge:** ChatGPT (GitHub Models) · **Oracle:** flutter analyze + test.
         Status: {status}
+
+        > {note}
 
         <details><summary>Final check log (tail)</summary>
 

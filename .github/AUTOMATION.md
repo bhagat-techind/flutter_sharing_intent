@@ -73,9 +73,11 @@ prevents that recursion). So if you skip `GH_PAT`, the nightly job will open the
 `nightly-ensemble.yml` is an upgraded alternative to `nightly-autofix.yml`. Instead of
 one model, it runs:
 
-1. **Solver A — Claude Code** (your subscription) fixes the issue independently.
-2. **Solver B — Gemini CLI** (free tier) fixes the same issue independently.
-3. **Judge — Claude** merges the strongest parts of both into one optimized candidate.
+1. **Coder A — Claude Code** (your subscription) fixes the issue independently.
+2. **Coder B — Gemini CLI** (free tier) fixes the same issue independently.
+3. **Judge — ChatGPT via GitHub Models** (FREE — uses the built-in `GITHUB_TOKEN`,
+   needs `models: read`; **no OpenAI key and NOT your ChatGPT subscription**, which has
+   no API access) picks the better of the two candidates.
 4. **Oracle — your test suite** (`flutter analyze` + `flutter test`) decides pass/fail.
 5. If it fails, the failure log is fed back and the loop repeats (default **3** iterations).
 6. On pass → opens a normal PR. After the budget is exhausted → opens a **draft** PR with
