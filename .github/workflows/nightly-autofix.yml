@@ -81,6 +81,8 @@ jobs:
         with:
           # Subscription auth (Claude Pro/Max) — NOT an API key.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Scheduled/bot-triggered runs are allowed.
+          allowed_bots: "*"
           claude_args: "--model claude-sonnet-4-6 --allowedTools Bash,Edit,Write,Read,Glob,Grep"
           prompt: |
             You are an autonomous maintainer for this Flutter plugin (flutter_sharing_intent).
