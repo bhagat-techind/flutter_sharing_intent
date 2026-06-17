@@ -264,15 +264,27 @@ end
 [//]: # ()
 [//]: # (Here `group.com.techind.flutterSharingIntentExample` is the App Group ID created in previous step.)
 
-#### 6. Add file [FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift)  to  [ios/Share Extension/FSIShareViewController.swift](./example/ios/Share%20Extension/FSIShareViewController.swift):
-You can get the file from [here](./example/ios/Share%20Extension/FSIShareViewController.swift)
+#### 6. Make your `ShareViewController` [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `FSIShareViewController`:
 
-##### Make your `ShareViewController` [ios/Share Extension/ShareViewController.swift](./example/ios/Share%20Extension/ShareViewController.swift) inherit from `FSIShareViewController`:
+You no longer need to copy any controller file into your Share Extension. Just
+`import flutter_sharing_intent` and inherit from `FSIShareViewController`, which
+ships with the plugin:
 
 ```swift
+// If you get a `no such module 'flutter_sharing_intent'` error,
+// go to Build Phases of your Runner target and move
+// `Embed Foundation Extension` to the top of `Thin Binary`.
+
+import flutter_sharing_intent
 
 class ShareViewController: FSIShareViewController {
-    
+
+    // Override this method to return false if you don't want to redirect
+    // to the host app automatically. Default is true.
+    // override func shouldAutoRedirect() -> Bool {
+    //     return false
+    // }
+
 }
 ```
 

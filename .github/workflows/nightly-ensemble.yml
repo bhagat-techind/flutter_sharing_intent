@@ -1,0 +1,82 @@
+name: Nightly Ensemble Fix
+
+# Multi-agent (Claude + Gemini) + judge + test-verified loop.
+# Runs at 01:30 IST (20:00 UTC). This SUPERSEDES nightly-autofix.yml —
+# disable that one if you adopt this (don't run both on the same issue).
+on:
+  schedule:
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number (optional; defaults to oldest open `auto-fix` issue)"
+        required: false
+      max_iters:
+        description: "Max refinement iterations"
+        required: false
+        default: "3"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: nightly-ensemble
+  cancel-in-progress: false
+
+jobs:
+  ensemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select issue
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_ISSUE: ${{ github.event.inputs.issue }}
+        run: |
+          if [ -n "$INPUT_ISSUE" ]; then
+            num="$INPUT_ISSUE"
+          else
+            num=$(gh issue list --label auto-fix --state open --limit 1 --json number --jq '.[0].number // empty')
+          fi
+          if [ -z "$num" ]; then
+            echo "No open 'auto-fix' issue — nothing to do."
+            echo "none=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+          {
+            echo "title<<__EOF__"; gh issue view "$num" --json title --jq .title; echo "__EOF__"
+            echo "body<<__EOF__";  gh issue view "$num" --json body  --jq '.body // ""'; echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup toolchain
+        if: steps.pick.outputs.none != 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install AI CLIs
+        if: steps.pick.outputs.none != 'true'
+        run: |
+          npm install -g @anthropic-ai/claude-code @google/gemini-cli
+          claude --version || true
+          gemini --version || true
+
+      - name: Run ensemble fix loop
+        if: steps.pick.outputs.none != 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.pick.outputs.number }}
+          ISSUE_TITLE: ${{ steps.pick.outputs.title }}
+          ISSUE_BODY: ${{ steps.pick.outputs.body }}
+          MAX_ITERS: ${{ github.event.inputs.max_iters || '3' }}
+          BASE_BRANCH: main
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # PAT so the opened PR triggers pr-checks.yml (falls back to built-in token).
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: python3 .github/scripts/ensemble_fix.py

@@ -1,0 +1,87 @@
+name: PR Checks
+
+# Runs on every PR (including the ones the nightly auto-fix opens, provided that
+# PR was created with a PAT — see .github/AUTOMATION.md).
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  test:
+    name: Test branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Unit tests
+        run: |
+          if [ -d test ]; then
+            flutter test
+          else
+            echo "No test/ directory — skipping."
+          fi
+
+  review:
+    name: Claude review
+    runs-on: ubuntu-latest
+    # Only review if the subscription token is configured.
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Claude — review the PR diff
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model claude-sonnet-4-6"
+          prompt: |
+            Review the changes in this pull request (#${{ github.event.pull_request.number }})
+            for a Flutter plugin with iOS (Swift) and Android (Kotlin) native code.
+            Focus on real correctness bugs, platform-specific issues, leaks, and obvious
+            regressions — not style nitpicks. Be concise.
+            Post the review as a single PR comment using `gh pr comment ${{ github.event.pull_request.number }}`.
+
+  notify:
+    name: Notify result
+    needs: [test, review]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Telegram notification
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEST_RESULT: ${{ needs.test.result }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT" ]; then
+            echo "Telegram secrets not set — skipping notification."
+            exit 0
+          fi
+          if [ "$TEST_RESULT" = "success" ]; then
+            status="✅ Tests PASSED"
+          else
+            status="❌ Tests FAILED ($TEST_RESULT)"
+          fi
+          text="$status%0AReview: $REVIEW_RESULT%0A${PR_TITLE}%0A${PR_URL}"
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="${TG_CHAT}" \
+            --data-urlencode "text=${text}" >/dev/null
+          echo "Notification sent."
