@@ -12,10 +12,12 @@ on:
         required: false
 
 # Needed so Claude can push a branch and open a PR.
+# `id-token: write` is required by claude-code-action for its OIDC auth.
 permissions:
   contents: write
   pull-requests: write
   issues: write
+  id-token: write
 
 # Never run two nightly fixes at once.
 concurrency:
