@@ -42,13 +42,42 @@ jobs:
         run: |
           if [ -n "$INPUT_ISSUE" ]; then
             num="$INPUT_ISSUE"
+            source="workflow_dispatch"
           else
-            num=$(gh issue list --label auto-fix --state open --limit 1 --json number --jq '.[0].number // empty')
+            # Priority 1: explicit opt-in via 'auto-fix' label
+            num=$(gh issue list --label auto-fix --state open --limit 1 \
+                  --json number --jq '.[0].number // empty')
+            source="auto-fix label"
+
+            # Priority 2: unassigned bug reports (no label needed)
+            if [ -z "$num" ]; then
+              num=$(gh issue list --label bug --state open --json number,assignees --limit 20 \
+                    --jq '[.[] | select(.assignees == [])] | .[0].number // empty')
+              source="bug label (unassigned)"
+            fi
+
+            # Priority 3: oldest open issue with no assignee
+            if [ -z "$num" ]; then
+              num=$(gh issue list --state open --json number,assignees --limit 20 \
+                    --jq '[.[] | select(.assignees == [])] | .[0].number // empty')
+              source="oldest open unassigned issue"
+            fi
           fi
+
+          # Always print diagnostics so you can see what the bot found
+          total=$(gh issue list --state open --limit 200 --json number --jq 'length')
+          labeled=$(gh issue list --label auto-fix --state open --limit 200 --json number --jq 'length')
+          bugs=$(gh issue list --label bug --state open --json number,assignees --limit 100 \
+                 --jq '[.[] | select(.assignees == [])] | length')
+          echo "=== Diagnostics: $total open issues | $labeled with 'auto-fix' label | $bugs unassigned bugs ==="
+
           if [ -z "$num" ]; then
-            echo "No open 'auto-fix' issue — nothing to do."
+            echo "No open issues found — nothing to do."
+            echo "Tip: Label issues with 'auto-fix' to explicitly queue them, or leave bug issues unassigned."
             echo "none=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
+
+          echo "Selected issue #$num via [$source]"
           echo "number=$num" >> "$GITHUB_OUTPUT"
           {
             echo "title<<__EOF__"; gh issue view "$num" --json title --jq .title; echo "__EOF__"
