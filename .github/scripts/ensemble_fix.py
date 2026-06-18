@@ -30,6 +30,7 @@ import os
 import subprocess
 import sys
 import textwrap
+import urllib.error
 import urllib.request
 
 ISSUE = os.environ["ISSUE_NUMBER"]
@@ -40,7 +41,11 @@ BASE = os.environ.get("BASE_BRANCH", "main")
 FIX_BRANCH = f"fix/issue-{ISSUE}"
 
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "meta-llama/Llama-3.3-70B-Instruct")
-MODELS_ENDPOINT = "https://models.github.ai/inference/chat/completions"
+# Try newer GitHub endpoint first, fall back to the Azure-backed one.
+_GITHUB_MODELS_URLS = [
+    "https://models.github.ai/inference/chat/completions",
+    "https://models.inference.ai.azure.com/chat/completions",
+]
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
 
@@ -154,15 +159,15 @@ def _extract_json(text):
     return text[start:end + 1] if start != -1 else text
 
 
-def _call_judge(endpoint, model, token, label, prompt):
-    """Call one judge model. Returns parsed verdict dict or None on error."""
+def _call_judge_url(url, model, token, label, prompt):
+    """Call one judge endpoint. Returns parsed verdict dict or None on error."""
     body = json.dumps({
         "model": model,
         "temperature": 0.2,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(
-        endpoint, data=body,
+        url, data=body,
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -178,9 +183,22 @@ def _call_judge(endpoint, model, token, label, prompt):
         reason = verdict.get("reason", "")
         print(f"[judge/{label}] winner={winner} — {reason}")
         return verdict
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode()[:400]
+        print(f"[judge/{label}] HTTP {e.code} from {url} — {body_text}")
+        return None
     except Exception as e:
         print(f"[judge/{label}] error: {e}")
         return None
+
+
+def _call_judge(model, token, label, prompt):
+    """Call a GitHub Models judge, trying both endpoints."""
+    for url in _GITHUB_MODELS_URLS:
+        result = _call_judge_url(url, model, token, label, prompt)
+        if result is not None:
+            return result
+    return None
 
 
 def ai_judge(diff_a, pass_a, diff_b, pass_b, failure):
@@ -199,17 +217,24 @@ def ai_judge(diff_a, pass_a, diff_b, pass_b, failure):
 
     verdicts = []
 
-    # Judge 1: Llama-3.3-70B via GitHub Models (free, always available via GITHUB_TOKEN)
     gh_token = os.environ.get("GITHUB_MODELS_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+
+    # Judge 1: Llama-3.3-70B via GitHub Models (free, always available via GITHUB_TOKEN)
     if gh_token:
-        v = _call_judge(MODELS_ENDPOINT, JUDGE_MODEL, gh_token, "Llama-3.3 (GitHub Models)", prompt)
+        v = _call_judge(JUDGE_MODEL, gh_token, "Llama-3.3 (GitHub Models)", prompt)
         if v:
             verdicts.append(v)
 
-    # Judge 2: Llama-3.3-70B via Groq (free tier — add GROQ_API_KEY secret optionally)
+    # Judge 2: ChatGPT / GPT-4o via GitHub Models (free, same GITHUB_TOKEN, no OpenAI key)
+    if gh_token:
+        v = _call_judge("openai/gpt-4o", gh_token, "ChatGPT/GPT-4o (GitHub Models)", prompt)
+        if v:
+            verdicts.append(v)
+
+    # Judge 3: Llama-3.3-70B via Groq (free tier — add GROQ_API_KEY secret optionally)
     groq_key = os.environ.get("GROQ_API_KEY", "")
     if groq_key:
-        v = _call_judge(GROQ_ENDPOINT, "llama-3.3-70b-versatile", groq_key, "Llama-3.3 (Groq)", prompt)
+        v = _call_judge_url(GROQ_ENDPOINT, "llama-3.3-70b-versatile", groq_key, "Llama-3.3 (Groq)", prompt)
         if v:
             verdicts.append(v)
 
