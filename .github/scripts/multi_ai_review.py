@@ -2,24 +2,29 @@
 """
 Multi-AI PR reviewer — posts independent reviews from several free AI services.
 
-Services (all free, no paid API key required for the first three):
-  1. Llama-3.3-70B   via GitHub Models  — built-in GITHUB_TOKEN, always available
-  2. Mistral-Large   via GitHub Models  — built-in GITHUB_TOKEN, always available
-  3. ChatGPT/GPT-4o  via GitHub Models  — built-in GITHUB_TOKEN, always available
-  4. Gemini 2.0 Flash via Google AI     — free tier, needs GEMINI_API_KEY (optional)
-  5. Llama-3.3-70B   via Groq           — free tier, needs GROQ_API_KEY    (optional)
+GitHub Models (all free, built-in GITHUB_TOKEN, no extra key needed):
+  1. ChatGPT / GPT-4o          openai/gpt-4o
+  2. Llama 3.3 70B             meta/llama-3.3-70b-instruct
+  3. DeepSeek V3               deepseek/deepseek-v3-0324   ← great at code
+  4. Mistral Medium 3          mistral-ai/mistral-medium-2505
 
-Each reviewer posts its own PR comment so you get independent opinions side-by-side.
-Claude is intentionally excluded from PR review — it handles code generation only.
+Optional (need extra API key, both free-tier):
+  5. Gemini 2.0 Flash          GEMINI_API_KEY
+  6. Llama 3.3 70B via Groq    GROQ_API_KEY
 
-Required env: GITHUB_TOKEN (injected automatically in Actions), PR_NUMBER, GITHUB_REPOSITORY
+Each reviewer posts its own PR comment — independent perspectives side by side.
+Claude is excluded from PR review (it writes code; others review it).
+
+Model IDs verified live against models.github.ai on 2026-06-18.
+Re-verify with: python3 .github/scripts/verify_models.py
+
+Required env (auto-set in Actions): GITHUB_TOKEN, PR_NUMBER, GITHUB_REPOSITORY
 Optional env: GEMINI_API_KEY, GROQ_API_KEY
 
 Local testing:
-  export PR_NUMBER=<your-pr-number>
+  export PR_NUMBER=<number>
   export GITHUB_REPOSITORY=owner/repo
   python3 .github/scripts/multi_ai_review.py
-  (GitHub token is auto-detected from `gh auth token` if not set in env)
 """
 import json
 import os
@@ -32,7 +37,7 @@ import urllib.request
 PR_NUMBER = os.environ.get("PR_NUMBER", "")
 REPO = os.environ.get("GITHUB_REPOSITORY", "")
 
-# GitHub token — env var first, then auto-detect from gh CLI (useful for local testing)
+# GitHub token: env var first, then auto-detect from gh CLI (local testing)
 GH_TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
 if not GH_TOKEN:
     try:
@@ -43,13 +48,18 @@ if not GH_TOKEN:
     except Exception:
         pass
 
-# GitHub Models tries the newer endpoint first, falls back to the Azure-backed one.
-# Models use the "org/name" format on the github.ai endpoint.
-_GITHUB_MODELS_URLS = [
-    "https://models.github.ai/inference/chat/completions",
-    "https://models.inference.ai.azure.com/chat/completions",
-]
+# Single verified endpoint — model IDs below are confirmed for this URL only.
+# The Azure endpoint (models.inference.ai.azure.com) uses a DIFFERENT ID format.
+GITHUB_MODELS_URL = "https://models.github.ai/inference/chat/completions"
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+
+# Verified working model IDs on GITHUB_MODELS_URL (tested 2026-06-18)
+MODELS = {
+    "chatgpt":  "openai/gpt-4o",
+    "llama":    "meta/llama-3.3-70b-instruct",
+    "deepseek": "deepseek/deepseek-v3-0324",
+    "mistral":  "mistral-ai/mistral-medium-2505",
+}
 
 REVIEW_PROMPT = textwrap.dedent("""\
     You are a senior mobile developer reviewing a Flutter plugin pull request.
@@ -65,10 +75,8 @@ REVIEW_PROMPT = textwrap.dedent("""\
     4. Security — data leaks, improper file/permission access
     5. Obvious performance regressions
 
-    Skip style, formatting, and nitpicks. Be concise — use short bullet points.
-    Start your response with a single-line verdict:
-      ✅ LGTM  |  ⚠️ Minor issues  |  ❌ Needs changes
-
+    Skip style, formatting, and nitpicks. Be concise — short bullet points.
+    Start with a one-line verdict: ✅ LGTM | ⚠️ Minor issues | ❌ Needs changes
     Then list findings (if any) grouped by severity.
 """)
 
@@ -95,48 +103,33 @@ def post_comment(body):
         print(f"Failed to post comment: {result.stderr}", flush=True)
 
 
-def _call_openai_compat(url, model, token, label, diff):
-    """Call any OpenAI-compatible endpoint. Returns text or None."""
-    prompt = REVIEW_PROMPT.format(diff=diff)
+def _call_openai_compat(url, model_id, token, label, diff):
+    """Call any OpenAI-compatible endpoint. Returns review text or None."""
     body = json.dumps({
-        "model": model,
+        "model": model_id,
         "temperature": 0.3,
         "max_tokens": 1024,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": REVIEW_PROMPT.format(diff=diff)}],
     }).encode()
-    req = urllib.request.Request(
-        url, data=body,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-    )
+    req = urllib.request.Request(url, data=body, headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    })
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.loads(r.read().decode())
-        return data["choices"][0]["message"]["content"]
+            return json.loads(r.read().decode())["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
-        body_text = e.read().decode()[:400]
-        print(f"[{label}] HTTP {e.code} from {url} — {body_text}", flush=True)
+        err = e.read().decode()[:300]
+        print(f"[{label}] HTTP {e.code}: {err}", flush=True)
         return None
     except Exception as e:
         print(f"[{label}] error: {e}", flush=True)
         return None
 
 
-def _call_github_models(model, label, diff):
-    """Try GitHub Models endpoints in order; return first success."""
-    for url in _GITHUB_MODELS_URLS:
-        result = _call_openai_compat(url, model, GH_TOKEN, label, diff)
-        if result is not None:
-            print(f"[{label}] succeeded via {url}", flush=True)
-            return result
-    return None
-
-
 def _call_gemini(api_key, diff):
-    """Call Gemini REST API. Tries gemini-2.0-flash then gemini-1.5-flash."""
+    """Gemini REST API — tries 2.0-flash then 1.5-flash."""
     prompt = REVIEW_PROMPT.format(diff=diff)
     for model in ("gemini-2.0-flash", "gemini-1.5-flash"):
         url = (
@@ -154,8 +147,7 @@ def _call_gemini(api_key, diff):
             print(f"[Gemini] succeeded with {model}", flush=True)
             return data["candidates"][0]["content"]["parts"][0]["text"]
         except urllib.error.HTTPError as e:
-            body_text = e.read().decode()[:400]
-            print(f"[Gemini/{model}] HTTP {e.code} — {body_text}", flush=True)
+            print(f"[Gemini/{model}] HTTP {e.code}: {e.read().decode()[:200]}", flush=True)
         except Exception as e:
             print(f"[Gemini/{model}] error: {e}", flush=True)
     return None
@@ -163,7 +155,7 @@ def _call_gemini(api_key, diff):
 
 def main():
     if not PR_NUMBER:
-        sys.exit("PR_NUMBER env var is required. Set it to the PR number you want to review.")
+        sys.exit("PR_NUMBER env var is required.")
 
     diff = get_pr_diff()
     if not diff.strip():
@@ -172,45 +164,42 @@ def main():
 
     reviews = []
 
-    # 1. Llama-3.3-70B via GitHub Models (always free, no new secret)
-    review = _call_github_models("meta-llama/Llama-3.3-70B-Instruct", "Llama-3.3 (GitHub Models)", diff)
-    if review:
-        reviews.append(("🦙 **Llama 3.3 70B** (GitHub Models, free)", review))
+    # ── GitHub Models reviewers (free, no extra secret) ──────────────────────
+    github_reviewers = [
+        ("🤖 **ChatGPT / GPT-4o** (GitHub Models)",      MODELS["chatgpt"]),
+        ("🦙 **Llama 3.3 70B** (GitHub Models)",          MODELS["llama"]),
+        ("🐋 **DeepSeek V3** (GitHub Models)",            MODELS["deepseek"]),
+        ("🌬️ **Mistral Medium 3** (GitHub Models)",       MODELS["mistral"]),
+    ]
+    for name, model_id in github_reviewers:
+        review = _call_openai_compat(GITHUB_MODELS_URL, model_id, GH_TOKEN, name, diff)
+        if review:
+            reviews.append((name, review))
+            print(f"[OK] {name}", flush=True)
 
-    # 2. Mistral Large via GitHub Models (always free, no new secret)
-    review = _call_github_models("mistral-ai/Mistral-Large-2411", "Mistral-Large (GitHub Models)", diff)
-    if review:
-        reviews.append(("🌬️ **Mistral Large** (GitHub Models, free)", review))
-
-    # 3. ChatGPT / GPT-4o via GitHub Models (always free, same built-in token, no OpenAI key)
-    review = _call_github_models("openai/gpt-4o", "ChatGPT/GPT-4o (GitHub Models)", diff)
-    if review:
-        reviews.append(("🤖 **ChatGPT / GPT-4o** (GitHub Models, free)", review))
-
-    # 4. Gemini 2.0 Flash (free tier — optional GEMINI_API_KEY)
+    # ── Gemini (optional — add GEMINI_API_KEY secret) ────────────────────────
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
     if gemini_key:
         review = _call_gemini(gemini_key, diff)
         if review:
-            reviews.append(("✨ **Gemini 2.0 Flash** (Google AI, free tier)", review))
+            reviews.append(("✨ **Gemini 2.0 Flash** (Google AI)", review))
+            print("[OK] Gemini", flush=True)
     else:
-        print("[Gemini] GEMINI_API_KEY not set — skipping.", flush=True)
+        print("[skip] GEMINI_API_KEY not set", flush=True)
 
-    # 5. Llama-3.3-70B via Groq (free tier — optional GROQ_API_KEY)
+    # ── Groq (optional — add GROQ_API_KEY secret) ────────────────────────────
     groq_key = os.environ.get("GROQ_API_KEY", "")
     if groq_key:
         review = _call_openai_compat(
-            GROQ_ENDPOINT, "llama-3.3-70b-versatile", groq_key,
-            "Llama-3.3 (Groq)", diff,
-        )
+            GROQ_ENDPOINT, "llama-3.3-70b-versatile", groq_key, "Groq/Llama", diff)
         if review:
-            reviews.append(("⚡ **Llama 3.3 70B** (Groq, free tier)", review))
+            reviews.append(("⚡ **Llama 3.3 70B** (Groq)", review))
+            print("[OK] Groq", flush=True)
     else:
-        print("[Groq] GROQ_API_KEY not set — skipping.", flush=True)
+        print("[skip] GROQ_API_KEY not set", flush=True)
 
     if not reviews:
         print("All AI reviewers failed — no comments posted.")
-        print("Check the HTTP error details above to diagnose the issue.")
         return
 
     for name, content in reviews:
@@ -221,9 +210,9 @@ def main():
             f"*Auto-generated · not a substitute for human review · verify before merging*"
         )
         post_comment(comment)
-        print(f"Posted review: {name}", flush=True)
+        print(f"Posted: {name}", flush=True)
 
-    print(f"\nPosted {len(reviews)} review comment(s).")
+    print(f"\nDone — {len(reviews)} review(s) posted.")
 
 
 if __name__ == "__main__":
