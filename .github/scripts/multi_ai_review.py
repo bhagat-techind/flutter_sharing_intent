@@ -33,6 +33,7 @@ import sys
 import textwrap
 import urllib.error
 import urllib.request
+import urllib.parse
 
 PR_NUMBER = os.environ.get("PR_NUMBER", "")
 REPO = os.environ.get("GITHUB_REPOSITORY", "")
@@ -115,6 +116,7 @@ def _call_openai_compat(url, model_id, token, label, diff):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     })
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
@@ -122,6 +124,67 @@ def _call_openai_compat(url, model_id, token, label, diff):
     except urllib.error.HTTPError as e:
         err = e.read().decode()[:300]
         print(f"[{label}] HTTP {e.code}: {err}", flush=True)
+        return None
+    except Exception as e:
+        print(f"[{label}] error: {e}", flush=True)
+        return None
+
+
+def _call_copilot(copilot_pat, label, diff):
+    """
+    GitHub Copilot Chat completions.
+    Requires a PAT from a GitHub account with an active Copilot subscription
+    (can be a different account from the repo owner — add as COPILOT_PAT secret).
+
+    Uses the same internal API that VSCode Copilot Chat uses. Skips gracefully
+    if the token is wrong or the Copilot subscription is inactive.
+    """
+    # Step 1: exchange the PAT for a short-lived Copilot session token
+    try:
+        token_req = urllib.request.Request(
+            "https://api.github.com/copilot_internal/v2/token",
+            headers={
+                "Authorization": f"Bearer {copilot_pat}",
+                "Accept": "application/json",
+                "Editor-Version": "vscode/1.96.0",
+                "Editor-Plugin-Version": "copilot-chat/0.22.4",
+                "User-Agent": "GitHubCopilotChat/0.22.4",
+            },
+        )
+        with urllib.request.urlopen(token_req, timeout=15) as r:
+            session_token = json.loads(r.read().decode())["token"]
+    except urllib.error.HTTPError as e:
+        print(f"[{label}] Could not get Copilot token — HTTP {e.code}: {e.read().decode()[:200]}", flush=True)
+        return None
+    except Exception as e:
+        print(f"[{label}] Could not get Copilot token: {e}", flush=True)
+        return None
+
+    # Step 2: call Copilot Chat completions with the session token
+    body = json.dumps({
+        "model": "gpt-4o",
+        "temperature": 0.3,
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": REVIEW_PROMPT.format(diff=diff)}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.githubcopilot.com/chat/completions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {session_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Editor-Version": "vscode/1.96.0",
+            "Editor-Plugin-Version": "copilot-chat/0.22.4",
+            "User-Agent": "GitHubCopilotChat/0.22.4",
+            "Copilot-Integration-Id": "vscode-chat",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read().decode())["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        print(f"[{label}] HTTP {e.code}: {e.read().decode()[:300]}", flush=True)
         return None
     except Exception as e:
         print(f"[{label}] error: {e}", flush=True)
@@ -140,7 +203,10 @@ def _call_gemini(api_key, diff):
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024},
         }).encode()
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(url, data=body, headers={
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        })
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
                 data = json.loads(r.read().decode())
@@ -176,6 +242,18 @@ def main():
         if review:
             reviews.append((name, review))
             print(f"[OK] {name}", flush=True)
+
+    # ── GitHub Copilot (optional — add COPILOT_PAT from your Copilot account) ─
+    # Your Copilot subscription can be on a DIFFERENT GitHub account than the
+    # repo owner. Create a classic PAT on that account and add it as COPILOT_PAT.
+    copilot_pat = os.environ.get("COPILOT_PAT", "")
+    if copilot_pat:
+        review = _call_copilot(copilot_pat, "GitHub Copilot", diff)
+        if review:
+            reviews.append(("🤖 **GitHub Copilot** (your Copilot account)", review))
+            print("[OK] GitHub Copilot", flush=True)
+    else:
+        print("[skip] COPILOT_PAT not set", flush=True)
 
     # ── Gemini (optional — add GEMINI_API_KEY secret) ────────────────────────
     gemini_key = os.environ.get("GEMINI_API_KEY", "")

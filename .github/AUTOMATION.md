@@ -40,8 +40,9 @@ GitHub → repo **Settings → Secrets and variables → Actions → New reposit
 | Secret | Required? | Purpose |
 |--------|-----------|---------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | **Yes** | Subscription auth for the fix step (Coder A). |
-| `GEMINI_API_KEY` | Recommended | Free-tier key from [Google AI Studio](https://aistudio.google.com/apikey). Coder B in ensemble + 3rd reviewer in PR checks. |
-| `GROQ_API_KEY` | Optional | Free-tier key from [groq.com](https://console.groq.com). Adds a 2nd judge vote in ensemble + 4th reviewer in PR checks. Fast inference, free signup. |
+| `GEMINI_API_KEY` | Recommended | Free-tier key from [Google AI Studio](https://aistudio.google.com/apikey). Coder B in ensemble + reviewer in PR checks. |
+| `COPILOT_PAT` | Optional | Classic PAT from your **Copilot-enabled GitHub account** (can be a different account than the repo owner — see note below). Adds Copilot as a judge + PR reviewer. |
+| `GROQ_API_KEY` | Optional | Free-tier key from [groq.com](https://console.groq.com). Adds Llama judge vote + PR reviewer. |
 | `GH_PAT` | Recommended | A fine-grained PAT (Contents + Pull requests: write). Used so the auto-opened PR **triggers** `pr-checks.yml`. See note below. |
 | `TELEGRAM_BOT_TOKEN` | Optional | Bot token from [@BotFather](https://t.me/BotFather) for notifications. |
 | `TELEGRAM_CHAT_ID` | Optional | Your chat ID (message the bot, then read it from `https://api.telegram.org/bot<token>/getUpdates`). |
@@ -63,6 +64,35 @@ Then label any issue you want auto-fixed. Leave unlabelled issues alone.
 Settings → **Actions → General → Workflow permissions** → tick
 **"Allow GitHub Actions to create and approve pull requests."**
 
+## `COPILOT_PAT` — using Copilot from a different account
+
+Your Copilot subscription can be on Account B while the repo lives on Account A.
+To use it:
+
+1. Sign into **Account B** (your Copilot account) on github.com.
+2. Go to **Settings → Developer settings → Personal access tokens → Tokens (classic)**.
+3. Generate a new token — no special scopes needed beyond the defaults (or just `user:read`).
+4. Copy the token and add it as `COPILOT_PAT` in Account A's repo secrets.
+
+The workflow exchanges that token for a short-lived Copilot session token automatically.
+If the token is wrong or the subscription is inactive, Copilot is silently skipped.
+
+## Nightly Auto-Fix vs Nightly Ensemble Fix — what's the difference?
+
+| | **Nightly Auto-Fix** | **Nightly Ensemble Fix** |
+|-|---------------------|------------------------|
+| Coders | Claude only | Claude **+** Gemini (independently) |
+| Judge | None — Claude decides on its own | Llama + ChatGPT + DeepSeek + Copilot (majority vote) |
+| Test oracle | `flutter analyze` (inside Claude's prompt) | `flutter analyze` + `flutter test` (objective, after judge picks winner) |
+| Retry loop | No — one attempt | Yes — up to 3 iterations with failure feedback |
+| Speed | ~5 min | ~20–30 min |
+| Best for | Simple, well-defined bugs | Harder or ambiguous issues |
+| Secrets needed | `CLAUDE_CODE_OAUTH_TOKEN` | + `GEMINI_API_KEY` |
+
+**Use only one at a time.** Both pick from the same issue queue, so running both means they race to fix the same issue. Disable Auto-Fix (Actions → workflow → ⋯ → Disable) when you switch to Ensemble.
+
+**Recommendation:** start with Auto-Fix. When it consistently fails on your issues, switch to Ensemble.
+
 ## Why the `GH_PAT`?
 
 PRs created with the built-in `GITHUB_TOKEN` **do not** trigger other workflows (GitHub
@@ -77,10 +107,13 @@ writes the code; different models catch bugs in it).
 
 | Reviewer | Always active? | Key needed |
 |----------|---------------|------------|
-| 🦙 Llama 3.3 70B (GitHub Models) | ✅ Yes | None — uses `GITHUB_TOKEN` |
-| 🌬️ Mistral Large (GitHub Models)  | ✅ Yes | None — uses `GITHUB_TOKEN` |
-| ✨ Gemini 1.5 Flash               | If key set | `GEMINI_API_KEY` (free) |
-| ⚡ Llama 3.3 70B (Groq)           | If key set | `GROQ_API_KEY` (free) |
+| 🤖 ChatGPT / GPT-4o (GitHub Models) | ✅ Yes | None — uses `GITHUB_TOKEN` |
+| 🦙 Llama 3.3 70B (GitHub Models)    | ✅ Yes | None — uses `GITHUB_TOKEN` |
+| 🐋 DeepSeek V3 (GitHub Models)      | ✅ Yes | None — uses `GITHUB_TOKEN` |
+| 🌬️ Mistral Medium 3 (GitHub Models) | ✅ Yes | None — uses `GITHUB_TOKEN` |
+| 🤖 GitHub Copilot                   | If key set | `COPILOT_PAT` (your Copilot account) |
+| ✨ Gemini 2.0 Flash                 | If key set | `GEMINI_API_KEY` (free) |
+| ⚡ Llama 3.3 70B (Groq)             | If key set | `GROQ_API_KEY` (free) |
 
 Each posts its own PR comment. You get 2–4 independent perspectives before merging.
 Logic lives in [`.github/scripts/multi_ai_review.py`](scripts/multi_ai_review.py).

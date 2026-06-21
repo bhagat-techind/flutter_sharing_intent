@@ -32,6 +32,7 @@ import sys
 import textwrap
 import urllib.error
 import urllib.request
+import urllib.parse
 
 ISSUE = os.environ["ISSUE_NUMBER"]
 TITLE = os.environ.get("ISSUE_TITLE", "")
@@ -170,6 +171,7 @@ def _call_judge_url(url, model, token, label, prompt):
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
     )
     try:
@@ -187,6 +189,57 @@ def _call_judge_url(url, model, token, label, prompt):
         return None
     except Exception as e:
         print(f"[judge/{label}] error: {e}")
+        return None
+
+
+def _call_copilot_judge(copilot_pat, prompt):
+    """Exchange COPILOT_PAT for a session token then judge via Copilot Chat."""
+    try:
+        token_req = urllib.request.Request(
+            "https://api.github.com/copilot_internal/v2/token",
+            headers={
+                "Authorization": f"Bearer {copilot_pat}",
+                "Accept": "application/json",
+                "Editor-Version": "vscode/1.96.0",
+                "Editor-Plugin-Version": "copilot-chat/0.22.4",
+                "User-Agent": "GitHubCopilotChat/0.22.4",
+            },
+        )
+        with urllib.request.urlopen(token_req, timeout=15) as r:
+            session_token = json.loads(r.read().decode())["token"]
+    except Exception as e:
+        print(f"[judge/Copilot] Could not get session token: {e}")
+        return None
+
+    body = json.dumps({
+        "model": "gpt-4o",
+        "temperature": 0.2,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.githubcopilot.com/chat/completions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {session_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Editor-Version": "vscode/1.96.0",
+            "Editor-Plugin-Version": "copilot-chat/0.22.4",
+            "User-Agent": "GitHubCopilotChat/0.22.4",
+            "Copilot-Integration-Id": "vscode-chat",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            content = json.loads(r.read().decode())["choices"][0]["message"]["content"]
+        verdict = json.loads(_extract_json(content))
+        print(f"[judge/Copilot] winner={verdict.get('winner')} — {verdict.get('reason')}")
+        return verdict
+    except urllib.error.HTTPError as e:
+        print(f"[judge/Copilot] HTTP {e.code}: {e.read().decode()[:300]}")
+        return None
+    except Exception as e:
+        print(f"[judge/Copilot] error: {e}")
         return None
 
 
@@ -227,7 +280,14 @@ def ai_judge(diff_a, pass_a, diff_b, pass_b, failure):
         if v:
             verdicts.append(v)
 
-    # Judge 4: Llama-3.3-70B via Groq (free tier — add GROQ_API_KEY secret optionally)
+    # Judge 4: GitHub Copilot (add COPILOT_PAT from your Copilot-enabled account)
+    copilot_pat = os.environ.get("COPILOT_PAT", "")
+    if copilot_pat:
+        v = _call_copilot_judge(copilot_pat, prompt)
+        if v:
+            verdicts.append(v)
+
+    # Judge 5: Llama-3.3-70B via Groq (free tier — add GROQ_API_KEY secret optionally)
     groq_key = os.environ.get("GROQ_API_KEY", "")
     if groq_key:
         v = _call_judge_url(GROQ_ENDPOINT, "llama-3.3-70b-versatile", groq_key, "Llama-3.3 (Groq)", prompt)

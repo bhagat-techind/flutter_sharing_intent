@@ -49,6 +49,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          # COPILOT_PAT: PAT from your Copilot-enabled account (can be a different account).
+          # Create a classic PAT at https://github.com/settings/tokens and add as repo secret.
+          COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

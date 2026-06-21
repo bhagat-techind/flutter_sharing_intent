@@ -56,11 +56,11 @@ jobs:
               source="bug label (unassigned)"
             fi
 
-            # Priority 3: oldest open issue with no assignee
+            # Priority 3: absolute fallback — pick any oldest open issue
             if [ -z "$num" ]; then
-              num=$(gh issue list --state open --json number,assignees --limit 20 \
-                    --jq '[.[] | select(.assignees == [])] | .[0].number // empty')
-              source="oldest open unassigned issue"
+              num=$(gh issue list --state open --limit 1 \
+                    --json number --jq '.[0].number // empty')
+              source="oldest open issue (no filter)"
             fi
           fi
 
