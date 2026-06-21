@@ -77,8 +77,22 @@ REVIEW_PROMPT = textwrap.dedent("""\
     5. Obvious performance regressions
 
     Skip style, formatting, and nitpicks. Be concise — short bullet points.
+
+    You MUST follow this exact output structure:
+
     Start with a one-line verdict: ✅ LGTM | ⚠️ Minor issues | ❌ Needs changes
-    Then list findings (if any) grouped by severity.
+
+    Then a short paragraph (2-3 sentences) summarising what the PR does.
+
+    Then findings grouped by severity (omit sections that have no findings):
+    **Critical:** (blocks merge)
+    **Minor:** (should fix before merge)
+
+    End with this section — always include it, even if the list is empty:
+    **Action Items:**
+    - <concrete thing the author should do, e.g. "Add null check for X in file Y">
+    - <...>
+    (If there are no action items, write: - None — ready to merge.)
 """)
 
 
