@@ -35,6 +35,7 @@ Optional env: GEMINI_API_KEY, COPILOT_PAT, GROQ_API_KEY
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -51,12 +52,43 @@ FIX_BRANCH = f"fix/issue-{ISSUE}"
 GITHUB_MODELS_URL = "https://models.github.ai/inference/chat/completions"
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
-# Verified model IDs for models.github.ai (tested 2026-06-18)
+# Verified model IDs for models.github.ai (tested 2026-06-18).
+# These 3 were chosen because they are free via GITHUB_TOKEN, represent
+# different model families (Meta/OpenAI/DeepSeek) for diverse judgements,
+# and all return structured JSON reliably at temperature 0.2.
 _JUDGE_MODELS = [
     ("meta/llama-3.3-70b-instruct",  "Llama-3.3 (GitHub Models)"),
     ("openai/gpt-4o",                 "ChatGPT/GPT-4o (GitHub Models)"),
     ("deepseek/deepseek-v3-0324",     "DeepSeek-V3 (GitHub Models)"),
 ]
+
+
+# ── Startup dependency check ────────────────────────────────────────────────
+
+def _check_deps():
+    """Fail fast with a clear message if required tools are missing from PATH."""
+    required = {
+        "git":     "install via your OS package manager",
+        "gh":      "install from https://cli.github.com",
+        "flutter": "install from https://docs.flutter.dev/get-started/install",
+        "claude":  "npm install -g @anthropic-ai/claude-code",
+    }
+    optional = {
+        "gemini": "npm install -g @google/gemini-cli  (needed for Coder B)",
+    }
+    missing_required = [f"  {cmd}  →  {hint}" for cmd, hint in required.items() if not shutil.which(cmd)]
+    missing_optional = [f"  {cmd}  →  {hint}" for cmd, hint in optional.items() if not shutil.which(cmd)]
+
+    if missing_optional:
+        print("[deps] Optional tools not found (will skip those coders):")
+        for line in missing_optional:
+            print(line)
+
+    if missing_required:
+        sys.exit(
+            "[deps] FATAL — required tools missing from PATH:\n"
+            + "\n".join(missing_required)
+        )
 
 
 # ── Utilities ──────────────────────────────────────────────────────────────
@@ -92,17 +124,31 @@ def diff_against_base():
 
 
 def _extract_diff_blocks(text):
-    """Pull unified-diff content from ```diff … ``` or bare diff hunks."""
-    # prefer ```diff blocks
+    """
+    Pull unified-diff content from an AI response.
+    Handles: ```diff … ```, plain ``` … ``` containing a diff, bare ---/+++ hunks,
+    and Windows \\r\\n line endings.
+    """
+    # Normalise line endings first so regexes only need to handle \\n
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 1. Prefer explicit ```diff blocks
     matches = re.findall(r"```diff\n(.*?)```", text, re.DOTALL)
     if matches:
-        return "\n".join(matches)
-    # fallback: bare hunks starting with ---/+++
+        return "\n".join(m.strip() for m in matches)
+
+    # 2. Plain ``` block that starts with --- (diff without language tag)
+    matches = re.findall(r"```\n(---\s+\S.*?)```", text, re.DOTALL)
+    if matches:
+        return "\n".join(m.strip() for m in matches)
+
+    # 3. Bare unified diff hunks in the response body
+    # Pattern: --- a/path \n +++ b/path \n @@ ... followed by diff lines
     matches = re.findall(
-        r"(---\s+\S.*?\n\+\+\+\s+\S.*?\n(?:@@.*?@@[^\n]*\n(?:[+\- \\][^\n]*\n)*)+)",
-        text, re.DOTALL,
+        r"(---[ \t]+\S[^\n]*\n\+\+\+[ \t]+\S[^\n]*\n(?:@@[^\n]*\n(?:[+\- \\][^\n]*\n)*)+)",
+        text,
     )
-    return "\n".join(matches)
+    return "\n".join(m.strip() for m in matches)
 
 
 # ── Oracle ─────────────────────────────────────────────────────────────────
@@ -126,13 +172,16 @@ def production_check():
     """
     issues = []
 
-    # Re-run analyze looking for warnings in output (not just exit code)
+    # Re-run analyze and check for analyzer-level warnings only.
+    # Use the bullet format "warning •" to avoid false positives from
+    # flutter pub get messages like "warning: X packages have newer versions".
     rc, out = run("flutter analyze")
     if rc != 0:
         return False, f"flutter analyze failed in production check:\n{out}"
-    warning_lines = [l for l in out.splitlines() if " warning •" in l or "warning:" in l.lower()]
+    warning_lines = [l for l in out.splitlines() if " warning •" in l]
     if warning_lines:
-        issues.append("Warnings found:\n" + "\n".join(warning_lines[:10]))
+        issues.append("Analyzer warnings found (fix or suppress with // ignore):\n"
+                      + "\n".join(warning_lines[:10]))
 
     # Inspect only the lines ADDED by this diff for code smells
     _, diff_text = run(f"git --no-pager diff origin/{BASE} -- '*.dart' '*.swift' '*.kt'")
@@ -223,8 +272,18 @@ def _get_copilot_token(pat):
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read().decode())["token"]
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            print("[Copilot] Token exchange failed: COPILOT_PAT is invalid or expired "
+                  "(HTTP 401). Regenerate the classic PAT at github.com/settings/tokens.")
+        elif e.code == 403:
+            print("[Copilot] Token exchange failed: account has no active Copilot "
+                  "subscription (HTTP 403). Check the account that owns COPILOT_PAT.")
+        else:
+            print(f"[Copilot] Token exchange failed: HTTP {e.code} — {e.read().decode()[:200]}")
+        return None
     except Exception as e:
-        print(f"[Copilot] Could not get session token: {e}")
+        print(f"[Copilot] Token exchange failed: {e}")
         return None
 
 
@@ -508,6 +567,7 @@ def apply_synthesis(diffs, base, synthesis_instructions):
 # ── Main loop ───────────────────────────────────────────────────────────────
 
 def main():
+    _check_deps()
     copilot_pat = os.environ.get("COPILOT_PAT", "")
     failure_note = ""
     final_log = ""
