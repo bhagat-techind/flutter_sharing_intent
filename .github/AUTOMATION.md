@@ -81,13 +81,16 @@ If the token is wrong or the subscription is inactive, Copilot is silently skipp
 
 | | **Nightly Auto-Fix** | **Nightly Ensemble Fix** |
 |-|---------------------|------------------------|
-| Coders | Claude only | Claude **+** Gemini (independently) |
-| Judge | None — Claude decides on its own | Llama + ChatGPT + DeepSeek + Copilot (majority vote) |
-| Test oracle | `flutter analyze` (inside Claude's prompt) | `flutter analyze` + `flutter test` (objective, after judge picks winner) |
+| Coders | Claude only | Claude **+** Gemini **+** Copilot (all three, independently) |
+| Judge role | None — Claude decides | Synthesise best parts from ALL 3 solutions (not just pick one) |
+| Judges | — | Llama + ChatGPT + DeepSeek + Copilot + Groq (majority picks base; all synthesis hints merged) |
+| Stage 1 oracle | `flutter analyze` (inside Claude) | `flutter analyze` + `flutter test` (objective, after synthesis applied) |
+| Stage 2 oracle | — | Production gate: no warnings, no debug prints, no TODO/FIXME in diff |
+| PR opened when | Stage 1 passes | Stage 1 **and** Stage 2 both pass → normal PR; Stage 1 only → draft PR |
 | Retry loop | No — one attempt | Yes — up to 3 iterations with failure feedback |
-| Speed | ~5 min | ~20–30 min |
+| Speed | ~5 min | ~30–45 min |
 | Best for | Simple, well-defined bugs | Harder or ambiguous issues |
-| Secrets needed | `CLAUDE_CODE_OAUTH_TOKEN` | + `GEMINI_API_KEY` |
+| Secrets needed | `CLAUDE_CODE_OAUTH_TOKEN` | + `GEMINI_API_KEY`, `COPILOT_PAT` |
 
 **Use only one at a time.** Both pick from the same issue queue, so running both means they race to fix the same issue. Disable Auto-Fix (Actions → workflow → ⋯ → Disable) when you switch to Ensemble.
 
@@ -118,27 +121,30 @@ writes the code; different models catch bugs in it).
 Each posts its own PR comment. You get 2–4 independent perspectives before merging.
 Logic lives in [`.github/scripts/multi_ai_review.py`](scripts/multi_ai_review.py).
 
-## Ensemble mode (multi-AI + judge + test-verified loop)
+## Ensemble mode (3-coder synthesis + 2-stage quality gate)
 
-`nightly-ensemble.yml` is an upgraded alternative to `nightly-autofix.yml`. Instead of
-one model, it runs:
+`nightly-ensemble.yml` runs a full ensemble pipeline instead of a single model:
 
 1. **Coder A — Claude Code** (your subscription) fixes the issue independently.
 2. **Coder B — Gemini CLI** (free tier) fixes the same issue independently.
-3. **Judge — Llama-3.3-70B** via GitHub Models (FREE, built-in `GITHUB_TOKEN`, no extra
-   key) picks the better of the two candidates. If `GROQ_API_KEY` is set, a second Groq
-   judge votes too and the winner is decided by majority.
-4. **Oracle — your test suite** (`flutter analyze` + `flutter test`) decides pass/fail.
-5. If it fails, the failure log is fed back and the loop repeats (default **3** iterations).
-6. On pass → opens a normal PR. After the budget is exhausted → opens a **draft** PR with
-   the logs for you to take over.
+3. **Coder C — GitHub Copilot** (via `COPILOT_PAT`) generates a unified diff via Chat API.
+4. **Judge panel — Llama + ChatGPT + DeepSeek + Copilot + Groq** reviews ALL 3 candidates.
+   They do NOT just pick one — they synthesise: each judge identifies the best base candidate
+   and suggests specific improvements to take from the other two. Majority decides the base;
+   all synthesis hints are merged and Claude applies them on top.
+5. **Stage 1 oracle — `flutter analyze` + `flutter test`** — objective pass/fail. If it
+   fails, the failure log is fed back and the loop repeats (default **3** iterations).
+6. **Stage 2 oracle — production gate** — runs only when Stage 1 passes. Checks: no
+   warnings, no `print()`/`debugPrint()` debug statements, no `TODO`/`FIXME` in the diff.
+7. Both stages pass → normal PR. Stage 1 only → draft PR with production concerns listed.
+   Budget exhausted → draft PR for human review.
 
-The judge never decides correctness — the **tests do**. That's what keeps it honest.
+The judges never decide correctness — the **test suite and production gate do**.
 
-To use it: add `GEMINI_API_KEY`, then **disable `nightly-autofix.yml`** (Actions tab →
-the workflow → ⋯ → Disable) so the two don't fight over the same issue. Logic lives in
-[`.github/scripts/ensemble_fix.py`](scripts/ensemble_fix.py); tune `MAX_ITERS` or swap
-models there.
+To use it: add `GEMINI_API_KEY` + `COPILOT_PAT`, then **disable `nightly-autofix.yml`**
+(Actions tab → the workflow → ⋯ → Disable) so the two don't fight over the same issue.
+Logic lives in [`.github/scripts/ensemble_fix.py`](scripts/ensemble_fix.py); tune
+`MAX_ITERS` there.
 
 ## Safety notes
 
