@@ -119,6 +119,10 @@ def reset_to_base():
 
 
 def diff_against_base():
+    # Intent-to-add marks new untracked files so they appear in git diff.
+    # Without this, files created by a coder (e.g. ios/Package.swift) are
+    # invisible to `git diff` and the diff is reported as empty.
+    run("git add -N .")
     _, out = run(f"git --no-pager diff origin/{BASE} -- . ':(exclude).github'")
     return out
 
@@ -254,7 +258,12 @@ def _coder_claude(prompt):
 def _coder_gemini(prompt):
     run(
         "gemini -y -p " + shell_quote(prompt),
-        env={"GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", "")},
+        env={
+            "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
+            # Required: trust the workspace so Gemini CLI runs non-interactively
+            # in CI without prompting for directory approval.
+            "GEMINI_CLI_TRUST_WORKSPACE": "true",
+        },
     )
 
 
@@ -642,7 +651,12 @@ def main():
             note=f"Judge: {judge_reason}",
         )
 
-    # Budget exhausted
+    # Budget exhausted — only open a PR if there are actual changes to commit
+    final_diff = diff_against_base()
+    if not final_diff.strip():
+        print(f"[main] Budget exhausted after {MAX_ITERS} iterations with no net changes — no PR opened.")
+        sys.exit(1)
+
     open_pr(
         draft=True,
         log=final_log,
