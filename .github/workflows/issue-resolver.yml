@@ -22,7 +22,10 @@ permissions:
   issues: write
   models: read
 
-# One run per issue — prevents duplicate resolvers on the same issue.
+# One run per issue at a time — prevents duplicate resolvers racing on the same issue.
+# cancel-in-progress: false is intentional: if a resolver is already running for issue #N
+# and a second trigger arrives (e.g. issue edited), the second run queues rather than
+# cancelling the in-flight one. A cancellation would waste the 45-90 min already spent.
 concurrency:
   group: issue-resolver-${{ github.event.issue.number }}
   cancel-in-progress: false

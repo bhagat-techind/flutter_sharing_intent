@@ -57,17 +57,24 @@ GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 # Example: GEMINI_TIMEOUT=1200 for complex issues, GEMINI_TIMEOUT=120 for fast CI.
 try:
     GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
-    if GEMINI_TIMEOUT < 60:
+    if GEMINI_TIMEOUT <= 0:
+        print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is invalid (must be > 0) — "
+              f"using default 600s. Recommended range: 300–1200s.", flush=True)
+        GEMINI_TIMEOUT = 600
+    elif GEMINI_TIMEOUT < 60:
         print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is very low — "
-              "Gemini will almost certainly time out before producing any changes.", flush=True)
+              f"Gemini will almost certainly time out before producing any changes. "
+              f"Recommended range: 300–1200s.", flush=True)
     elif GEMINI_TIMEOUT > 1800:
         print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is very high — "
-              "a hung Gemini CLI could block this runner for >30 minutes.", flush=True)
+              f"a hung Gemini CLI could block this runner for >30 minutes. "
+              f"Recommended range: 300–1200s.", flush=True)
     else:
-        print(f"[config] GEMINI_TIMEOUT={GEMINI_TIMEOUT}s", flush=True)
+        print(f"[config] GEMINI_TIMEOUT={GEMINI_TIMEOUT}s (recommended range: 300–1200s)", flush=True)
 except ValueError:
     print(f"[config] WARNING: GEMINI_TIMEOUT env var is not a valid integer "
-          f"(got: {os.environ.get('GEMINI_TIMEOUT')!r}) — using default 600s.", flush=True)
+          f"(got: {os.environ.get('GEMINI_TIMEOUT')!r}) — using default 600s. "
+          f"Recommended range: 300–1200s.", flush=True)
     GEMINI_TIMEOUT = 600
 
 # Verified model IDs for models.github.ai (tested 2026-06-18).
