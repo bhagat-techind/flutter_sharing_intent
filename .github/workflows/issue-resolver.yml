@@ -1,0 +1,162 @@
+name: Issue Auto-Resolver
+
+# Triggers immediately when a new issue is opened.
+# Runs the full ensemble fixer (Claude + Gemini + Copilot) and opens a PR.
+#
+# Daily limit: max 3 auto-resolutions per UTC day.
+#   - Issues 1-3 opened today → resolver starts immediately, posts "working on it" comment.
+#   - Issues 4+ opened today  → posted a comment explaining nightly scheduler will handle it.
+#   - Failed runs do NOT count against the limit (only successes + in-progress count).
+#
+# The nightly scheduler (nightly-ensemble.yml) handles the rest:
+#   - Remaining issues from today (4+)
+#   - Issues from previous days not yet resolved
+#   - Already skips issues that already have a non-draft open PR from this workflow.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  models: read
+
+# One run per issue — prevents duplicate resolvers on the same issue.
+concurrency:
+  group: issue-resolver-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+
+      # ── Step 1: Daily rate limit check ────────────────────────────────────
+      # Counts in-progress + succeeded runs of THIS workflow today (UTC).
+      # This prevents a burst of 10 new issues from spawning 10 simultaneous resolvers.
+      - name: Check daily limit
+        id: limit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+        run: |
+          today=$(date -u +%Y-%m-%d)
+
+          # Count runs from today that are running or already succeeded
+          count=$(gh run list \
+            --repo "$REPO" \
+            --workflow="issue-resolver.yml" \
+            --limit 30 \
+            --json createdAt,conclusion,status \
+            --jq "[.[] | select(
+                    (.createdAt | startswith(\"$today\")) and
+                    (.status == \"in_progress\" or .status == \"queued\" or .conclusion == \"success\")
+                  )] | length" \
+            2>/dev/null || echo "0")
+
+          echo "Auto-resolutions today: ${count} / 3  (UTC date: $today)"
+
+          if [ "${count:-0}" -ge 3 ]; then
+            echo "Daily limit (3) reached."
+            gh issue comment "$ISSUE_NUM" \
+              --repo "$REPO" \
+              --body "$(cat <<'MSG'
+⏰ **Auto-resolver queued for tonight** — the daily limit of 3 immediate resolutions has been reached for today. The **nightly scheduler** (runs at 02:00–05:00 IST) will pick this up automatically.
+
+No action needed from you.
+MSG
+)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Limit OK — proceeding with auto-resolution."
+
+      # ── Step 2: Verify issue is still open ────────────────────────────────
+      - name: Verify issue is open
+        id: verify
+        if: steps.limit.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+        run: |
+          state=$(gh issue view "$ISSUE_NUM" --json state --jq .state)
+          if [ "$state" != "OPEN" ]; then
+            echo "Issue #$ISSUE_NUM is not open (state: $state) — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Step 3: Post "working on it" comment ─────────────────────────────
+      - name: Post start comment
+        if: steps.limit.outputs.skip != 'true' && steps.verify.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUM" --body "$(cat <<'MSG'
+🤖 **Auto-resolver started** — 3 AI coders are working on this issue right now:
+- **Coder A**: Claude (Anthropic)
+- **Coder B**: Gemini (Google)
+- **Coder C**: GitHub Copilot
+
+A panel of AI judges will synthesise the best combined solution, run \`flutter analyze\` + \`flutter test\`, and open a PR automatically. This usually takes **30–45 minutes**.
+
+If the fix isn't production-ready after 3 attempts, a **draft PR** will be opened for human review. The AI reviewers will also post feedback comments on the PR.
+MSG
+)"
+
+      # ── Step 4: Setup environment ─────────────────────────────────────────
+      - uses: actions/checkout@v4
+        if: steps.limit.outputs.skip != 'true' && steps.verify.outputs.skip != 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        if: steps.limit.outputs.skip != 'true' && steps.verify.outputs.skip != 'true'
+        with:
+          channel: stable
+
+      - name: Install AI CLIs
+        if: steps.limit.outputs.skip != 'true' && steps.verify.outputs.skip != 'true'
+        run: |
+          npm install -g @anthropic-ai/claude-code @google/gemini-cli
+          claude --version || true
+          gemini --version || true
+
+      # ── Step 5: Run the ensemble fixer ────────────────────────────────────
+      - name: Run ensemble fixer
+        if: steps.limit.outputs.skip != 'true' && steps.verify.outputs.skip != 'true'
+        timeout-minutes: 90
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE:  ${{ github.event.issue.title }}
+          ISSUE_BODY:   ${{ github.event.issue.body }}
+          MAX_ITERS:    "3"
+          BASE_BRANCH:  main
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GEMINI_API_KEY:          ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_MODELS_TOKEN:     ${{ github.token }}
+          COPILOT_PAT:             ${{ secrets.COPILOT_PAT }}
+          GROQ_API_KEY:            ${{ secrets.GROQ_API_KEY }}
+          GH_TOKEN:                ${{ secrets.GH_PAT || github.token }}
+        run: python3 .github/scripts/ensemble_fix.py
+
+      # ── Step 6: Post failure comment if fixer crashed ─────────────────────
+      - name: Post failure comment
+        if: >
+          failure() &&
+          steps.limit.outputs.skip != 'true' &&
+          steps.verify.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUM" --body "$(cat <<MSG
+❌ **Auto-resolver failed** — the ensemble fixer encountered an error before it could open a PR.
+
+[View the Actions log]($RUN_URL) for details. The **nightly scheduler** will retry this issue automatically.
+MSG
+)"
