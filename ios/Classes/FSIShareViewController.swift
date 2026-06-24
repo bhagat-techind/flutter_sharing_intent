@@ -143,10 +143,15 @@ open class FSIShareViewController: SLComposeServiceViewController {
             group.enter()
             // Try all SharedMediaType options similar to RSI but preserve explicit FSI order
             if provider.isImage {
-                provider.loadItem(forTypeIdentifier: UType.image, options: nil) { [weak self] data, error in
+                // Use loadFileRepresentation so that Photos-library assets and transient
+                // screenshot files (e.g. freshly taken screenshots on iOS 16+) are
+                // materialised to a readable file:// URL before we try to copy them.
+                // loadItem can return a ph:// or other non-file URL that FileManager
+                // cannot copy, causing silent failure and the host app never opening.
+                provider.loadFileRepresentation(forTypeIdentifier: UType.image) { [weak self] url, error in
                     defer { group.leave() }
-                    guard let self = self, error == nil else { self?.dismissWithError(); return }
-                    self.handleImageItem(data: data, index: index, total: attachments.count)
+                    guard let self = self, error == nil, let url = url else { self?.dismissWithError(); return }
+                    self.handleImageItem(data: url as NSURL, index: index, total: attachments.count)
                 }
                 continue
             }
