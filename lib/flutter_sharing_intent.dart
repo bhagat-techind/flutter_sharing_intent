@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
 
 import 'flutter_sharing_intent_platform_interface.dart';
@@ -9,13 +7,9 @@ import 'flutter_sharing_intent_platform_interface.dart';
 class FlutterSharingIntent {
   static FlutterSharingIntent instance = FlutterSharingIntent._();
   factory FlutterSharingIntent() => instance;
-  late EventChannel _eChannelMedia;
   Stream<List<SharedFile>>? _streamMedia;
 
-  FlutterSharingIntent._() {
-    _eChannelMedia =
-        const EventChannel("flutter_sharing_intent/events-sharing");
-  }
+  FlutterSharingIntent._();
 
   Future<String?> getPlatformVersion() {
     return FlutterSharingIntentPlatform.instance.getPlatformVersion();
@@ -45,24 +39,7 @@ class FlutterSharingIntent {
   /// If the app was started by a link intent or user activity the stream will
   /// not emit that initial one - query either the `getInitialMedia` instead.
   Stream<List<SharedFile>> getMediaStream() {
-    if (_streamMedia == null) {
-      final stream =
-          _eChannelMedia.receiveBroadcastStream("sharing").cast<String?>();
-      _streamMedia = stream.transform<List<SharedFile>>(
-        StreamTransformer<String?, List<SharedFile>>.fromHandlers(
-          handleData: (String? data, EventSink<List<SharedFile>> sink) {
-            if (data == null) {
-              sink.add([]);
-            } else {
-              final encoded = jsonDecode(data);
-              sink.add(encoded
-                  .map<SharedFile>((file) => SharedFile.fromJson(file))
-                  .toList());
-            }
-          },
-        ),
-      );
-    }
+    _streamMedia ??= FlutterSharingIntentPlatform.instance.getMediaStream();
     return _streamMedia!;
   }
 }
