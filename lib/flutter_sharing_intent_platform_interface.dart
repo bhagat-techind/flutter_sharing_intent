@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -35,5 +37,9 @@ abstract class FlutterSharingIntentPlatform extends PlatformInterface {
 
   void reset() async {
     throw UnimplementedError('reset() has not been implemented.');
+  }
+
+  Stream<List<SharedFile>> getMediaStream() {
+    throw UnimplementedError('getMediaStream() has not been implemented.');
   }
 }
