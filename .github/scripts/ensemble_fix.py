@@ -138,8 +138,7 @@ def run(cmd, check=False, env=None, capture=True, timeout=None, stdin=None):
             cmd, shell=True, text=True,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
-            stdin=subprocess.PIPE if stdin is not None else None,
-            input=stdin,
+            input=stdin,   # subprocess sets stdin=PIPE automatically when input is given
             env={**os.environ, **(env or {})},
             timeout=timeout,
         )
