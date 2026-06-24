@@ -36,7 +36,10 @@ jobs:
   review:
     name: Multi-AI review
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' }}
+    needs: test                        # wait for Test branch to finish first
+    if: success() && github.event_name == 'pull_request'
+    # success() means: only run if tests PASSED.
+    # No point reviewing broken code — the fix should make tests green first.
     steps:
       - uses: actions/checkout@v4
         with:

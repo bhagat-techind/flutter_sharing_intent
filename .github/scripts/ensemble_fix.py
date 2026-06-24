@@ -52,6 +52,31 @@ FIX_BRANCH = f"fix/issue-{ISSUE}"
 GITHUB_MODELS_URL = "https://models.github.ai/inference/chat/completions"
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
+# Gemini CLI can hang for hours on network issues (observed: 5h 58m).
+# Override via GEMINI_TIMEOUT env var (seconds). Default: 10 minutes.
+# Example: GEMINI_TIMEOUT=1200 for complex issues, GEMINI_TIMEOUT=120 for fast CI.
+try:
+    GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
+    if GEMINI_TIMEOUT <= 0:
+        print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is invalid (must be > 0) — "
+              f"using default 600s. Recommended range: 300–1200s.", flush=True)
+        GEMINI_TIMEOUT = 600
+    elif GEMINI_TIMEOUT < 60:
+        print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is very low — "
+              f"Gemini will almost certainly time out before producing any changes. "
+              f"Recommended range: 300–1200s.", flush=True)
+    elif GEMINI_TIMEOUT > 1800:
+        print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is very high — "
+              f"a hung Gemini CLI could block this runner for >30 minutes. "
+              f"Recommended range: 300–1200s.", flush=True)
+    else:
+        print(f"[config] GEMINI_TIMEOUT={GEMINI_TIMEOUT}s (recommended range: 300–1200s)", flush=True)
+except ValueError:
+    print(f"[config] WARNING: GEMINI_TIMEOUT env var is not a valid integer "
+          f"(got: {os.environ.get('GEMINI_TIMEOUT')!r}) — using default 600s. "
+          f"Recommended range: 300–1200s.", flush=True)
+    GEMINI_TIMEOUT = 600
+
 # Verified model IDs for models.github.ai (tested 2026-06-18).
 # These 3 were chosen because they are free via GITHUB_TOKEN, represent
 # different model families (Meta/OpenAI/DeepSeek) for diverse judgements,
@@ -93,14 +118,30 @@ def _check_deps():
 
 # ── Utilities ──────────────────────────────────────────────────────────────
 
-def run(cmd, check=False, env=None, capture=True):
+def run(cmd, check=False, env=None, capture=True, timeout=None):
+    """
+    Run a shell command and return (exit_code, stdout_str).
+
+    timeout (optional, int) — seconds; if the process runs longer it is killed
+              and (124, "") is returned. 124 mirrors the exit code that the Unix
+              `timeout` command uses, so log scanners get a consistent signal
+              regardless of which mechanism fired. Agentic coders (Claude, Gemini)
+              intentionally ignore this return value — they check filesystem state
+              via diff_against_base() after the call, not stdout.
+    check   — if True, sys.exit on non-zero exit code (do not set on timeout-able calls).
+    """
     print(f"\n$ {cmd}", flush=True)
-    p = subprocess.run(
-        cmd, shell=True, text=True,
-        stdout=subprocess.PIPE if capture else None,
-        stderr=subprocess.STDOUT if capture else None,
-        env={**os.environ, **(env or {})},
-    )
+    try:
+        p = subprocess.run(
+            cmd, shell=True, text=True,
+            stdout=subprocess.PIPE if capture else None,
+            stderr=subprocess.STDOUT if capture else None,
+            env={**os.environ, **(env or {})},
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"[timeout] Command killed after {timeout}s: {cmd[:80]}", flush=True)
+        return 124, ""
     out = p.stdout or ""
     if capture:
         print(out, flush=True)
@@ -256,6 +297,10 @@ def _coder_claude(prompt):
 
 
 def _coder_gemini(prompt):
+    # Return value intentionally ignored — Gemini edits files directly;
+    # filesystem state is captured afterwards via diff_against_base().
+    # On timeout (rc=124) the diff will be empty and Gemini is silently skipped.
+    # Override timeout via GEMINI_TIMEOUT env var (default 600s / 10 min).
     run(
         "gemini -y -p " + shell_quote(prompt),
         env={
@@ -264,6 +309,7 @@ def _coder_gemini(prompt):
             # in CI without prompting for directory approval.
             "GEMINI_CLI_TRUST_WORKSPACE": "true",
         },
+        timeout=GEMINI_TIMEOUT,
     )
 
 
@@ -578,10 +624,27 @@ def apply_synthesis(diffs, base, synthesis_instructions):
 def main():
     _check_deps()
     copilot_pat = os.environ.get("COPILOT_PAT", "")
-    failure_note = ""
     final_log = ""
     final_prod_report = ""
     judge_reason = ""
+
+    # Seed the first failure_note with any review feedback from a previous PR review cycle.
+    # Set by resolver-rerun.yml after it collects Action Items from AI reviewer comments.
+    # Security note: review_feedback originates from GitHub PR comments. It is only ever
+    # embedded in AI prompt strings that are passed through shell_quote() before being
+    # handed to the shell, so command injection is not possible.
+    review_feedback = (os.environ.get("REVIEW_FEEDBACK") or "").strip()
+    if review_feedback:
+        # Ignore if empty, too short, or a template placeholder (e.g. "No specific action items").
+        if len(review_feedback) < 20 or review_feedback.lower().startswith("no specific"):
+            review_feedback = ""
+
+    if review_feedback:
+        print(f"[main] Seeding run with review feedback ({len(review_feedback)} chars)")
+    failure_note = (
+        f"PR REVIEW FEEDBACK — apply ALL of these before anything else:\n{review_feedback}\n"
+        if review_feedback else ""
+    )
 
     for it in range(1, MAX_ITERS + 1):
         print(f"\n{'='*60}\n ITERATION {it}/{MAX_ITERS}\n{'='*60}")

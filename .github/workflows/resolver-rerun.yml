@@ -1,0 +1,239 @@
+name: Resolver Re-run
+
+# Automatically re-runs the ensemble fixer after AI reviewers post comments on a
+# bot-opened PR. Collects every "Action Items:" bullet from reviewer comments and
+# feeds them back to the ensemble as the first failure_note, so all three coders
+# know exactly what to fix.
+#
+# Runs at most 2 times per PR (tracked by counting bot comments that contain
+# "🔄 Resolver re-run"). After 2 re-runs the workflow skips itself permanently,
+# so there's no infinite loop risk.
+#
+# Trigger chain:
+#   ensemble bot opens PR  →  PR Checks (review job posts AI comments)
+#     → Resolver Re-run #1 (applies feedback, updates branch)
+#       → PR Checks again  → Resolver Re-run #2
+#         → PR Checks again → Resolver Re-run: max reached, stops.
+on:
+  # Fire whenever PR Checks finishes (whether tests passed or failed —
+  # the review job posts comments regardless).
+  workflow_run:
+    workflows: ["PR Checks"]
+    types: [completed]
+
+  # Manual trigger for testing or forcing an extra re-run.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to re-run resolver on"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  models: read
+
+jobs:
+  rerun:
+    runs-on: ubuntu-latest
+    steps:
+      # ── Step 1: Identify the PR ───────────────────────────────────────────
+      - name: Identify PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ github.event.inputs.pr_number }}" ]; then
+            pr_num="${{ github.event.inputs.pr_number }}"
+          else
+            # Derive from the triggering workflow's head branch (e.g. "fix/issue-76")
+            head_branch="${{ github.event.workflow_run.head_branch }}"
+            issue_num=$(echo "$head_branch" | grep -oP '(?<=fix/issue-)\d+' || true)
+            if [ -z "$issue_num" ]; then
+              echo "Head branch '$head_branch' is not a fix/issue-N branch — skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            pr_num=$(gh pr list --state open --head "fix/issue-$issue_num" \
+              --json number --jq '.[0].number // empty')
+          fi
+
+          if [ -z "$pr_num" ]; then
+            echo "No open PR found — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "PR number: $pr_num"
+          echo "number=$pr_num" >> "$GITHUB_OUTPUT"
+
+      # ── Step 2: Check re-run eligibility (max 2) ──────────────────────────
+      - name: Check eligibility
+        id: check
+        if: steps.pr.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ steps.pr.outputs.number }}
+        run: |
+          # Count existing re-runs by bot comments containing the sentinel string
+          rerun_count=$(gh pr view "$PR_NUM" --json comments \
+            --jq '[.comments[].body | select(contains("🔄 Resolver re-run"))] | length' \
+            2>/dev/null || echo "0")
+
+          echo "Existing re-runs: $rerun_count / 2"
+          if [ "${rerun_count:-0}" -ge 2 ]; then
+            echo "Max re-runs reached — stopping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "rerun_num=$((rerun_count + 1))" >> "$GITHUB_OUTPUT"
+
+      # ── Step 3: Extract Action Items from AI reviewer comments ────────────
+      - name: Collect review feedback
+        id: feedback
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ steps.pr.outputs.number }}
+        run: |
+          gh pr view "$PR_NUM" --json comments \
+            --jq '[.comments[].body] | join("\n---COMMENT---\n")' \
+          | python3 - << 'PYEOF'
+import sys, re
+text = sys.stdin.read()
+# Pull out every "**Action Items:**" section from AI review comments
+sections = re.findall(r'\*\*Action Items:\*\*\n((?:- .+\n?)+)', text)
+items = []
+for s in sections:
+    for item in re.findall(r'- (.+)', s):
+        # Skip "None" placeholder lines
+        if not re.match(r'none', item.strip(), re.I):
+            items.append(item.strip())
+# Deduplicate, preserve order
+seen, unique = set(), []
+for x in items:
+    if x not in seen:
+        seen.add(x); unique.append(x)
+if unique:
+    print("AI reviewers raised these concerns — ALL must be addressed:")
+    for item in unique:
+        print(f"  - {item}")
+else:
+    print("No specific action items found in reviews.")
+PYEOF
+          # Capture the output to a temp file (avoids env-var size issues)
+          gh pr view "$PR_NUM" --json comments \
+            --jq '[.comments[].body] | join("\n---COMMENT---\n")' \
+          | python3 -c "
+import sys, re
+text = sys.stdin.read()
+sections = re.findall(r'\*\*Action Items:\*\*\n((?:- .+\n?)+)', text)
+items = []
+for s in sections:
+    for item in re.findall(r'- (.+)', s):
+        if not re.match(r'none', item.strip(), re.I):
+            items.append(item.strip())
+seen, unique = set(), []
+for x in items:
+    if x not in seen: seen.add(x); unique.append(x)
+if unique:
+    print('AI reviewers raised these concerns — ALL must be addressed:')
+    for item in unique:
+        print(f'  - {item}')
+" > /tmp/review_feedback.txt || true
+
+          echo "=== Feedback to pass to resolver ==="
+          cat /tmp/review_feedback.txt || echo "(empty)"
+
+      # ── Step 4: Get issue details ─────────────────────────────────────────
+      - name: Get issue details
+        id: issue
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ steps.pr.outputs.number }}
+        run: |
+          head_branch=$(gh pr view "$PR_NUM" --json headRefName --jq .headRefName)
+          issue_num=$(echo "$head_branch" | grep -oP '(?<=fix/issue-)\d+' || true)
+          if [ -z "$issue_num" ]; then
+            # Try parsing "Closes #N" from the PR body
+            issue_num=$(gh pr view "$PR_NUM" --json body \
+              --jq '.body' | grep -oP '(?<=Closes #)\d+' | head -1 || true)
+          fi
+          if [ -z "$issue_num" ]; then
+            echo "Cannot determine issue number — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "number=$issue_num" >> "$GITHUB_OUTPUT"
+          {
+            echo "title<<__EOF__"
+            gh issue view "$issue_num" --json title --jq .title
+            echo "__EOF__"
+            echo "body<<__EOF__"
+            gh issue view "$issue_num" --json body  --jq '.body // ""'
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      # ── Step 5: Post "starting" comment ──────────────────────────────────
+      - name: Post start comment
+        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ steps.pr.outputs.number }}
+          RERUN_NUM: ${{ steps.check.outputs.rerun_num }}
+        run: |
+          gh pr comment "$PR_NUM" --body \
+            "🔄 **Resolver re-run $RERUN_NUM/2 started** — collecting all AI reviewer Action Items and re-running the ensemble fixer with that feedback."
+
+      # ── Step 6: Checkout + toolchain ─────────────────────────────────────
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        with:
+          channel: stable
+
+      - name: Install AI CLIs
+        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        run: |
+          npm install -g @anthropic-ai/claude-code @google/gemini-cli
+          claude --version || true
+          gemini --version || true
+
+      # ── Step 7: Re-run ensemble fixer with review feedback ────────────────
+      - name: Re-run ensemble fixer
+        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        timeout-minutes: 90
+        env:
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          ISSUE_TITLE:  ${{ steps.issue.outputs.title }}
+          ISSUE_BODY:   ${{ steps.issue.outputs.body }}
+          # Inject review feedback as the first failure_note so all coders see it
+          REVIEW_FEEDBACK_FILE: /tmp/review_feedback.txt
+          MAX_ITERS: "2"
+          BASE_BRANCH: main
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_MODELS_TOKEN: ${{ github.token }}
+          COPILOT_PAT:  ${{ secrets.COPILOT_PAT }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GH_TOKEN:     ${{ secrets.GH_PAT || github.token }}
+        run: |
+          export REVIEW_FEEDBACK="$(cat /tmp/review_feedback.txt 2>/dev/null || true)"
+          python3 .github/scripts/ensemble_fix.py
+
+      # ── Step 8: Post result comment ───────────────────────────────────────
+      - name: Post result comment
+        if: always() && steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ steps.pr.outputs.number }}
+          RERUN_NUM: ${{ steps.check.outputs.rerun_num }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            msg="✅ **Resolver re-run $RERUN_NUM/2 completed** — branch updated with reviewer feedback applied. PR Checks will re-run automatically."
+          else
+            msg="❌ **Resolver re-run $RERUN_NUM/2 failed** — check the [Actions log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          fi
+          gh pr comment "$PR_NUM" --body "$msg"

@@ -10,12 +10,42 @@ This repo runs a 4-stage automation, powered by your **Claude Code subscription*
 | 3. Test branch | `pr-checks.yml` (`test` job) | `flutter analyze` + `flutter test` on the PR. |
 | 4. Review + notify | `pr-checks.yml` (`review` + `notify` jobs) | **Llama + Mistral + Gemini + Groq** each post an independent review comment. Claude does NOT review — it only writes code. |
 
+## Immediate resolver (issue-resolver.yml)
+
+When a **new issue is opened**, the auto-resolver starts within seconds — no need to wait
+for the nightly run. It runs the full Claude + Gemini + Copilot ensemble and opens a PR
+automatically.
+
+**Daily limit: 3 resolutions per UTC day.**
+
+| New issues today | What happens |
+|-----------------|--------------|
+| 1st – 3rd issue | Resolver starts immediately, posts "🤖 Auto-resolver started" comment |
+| 4th+ issue | Posts "⏰ queued for tonight" comment; nightly scheduler handles it |
+
+The limit prevents a burst of 10 new issues from spawning 10 simultaneous 90-minute runners.
+Only successful + in-progress runs count — failed runs do not consume a slot.
+
+Issues not handled immediately are automatically picked up by the **nightly scheduler** (see below).
+
 ## Schedule
 
-The nightly job runs at **02:00 IST every day** (`cron: "30 20 * * *"`, which is
-20:30 UTC — GitHub cron is always UTC). Change the cron line if you move timezones.
-You can also run it on demand from **Actions → Nightly Auto-Fix → Run workflow**, with
-an optional issue number.
+The nightly ensemble runs **4 times a night (IST)**, each picking a *different* issue:
+
+| Run | Cron (UTC) | IST |
+|-----|------------|-----|
+| 1 | `30 20 * * *` | 02:00 AM |
+| 2 | `30 21 * * *` | 03:00 AM |
+| 3 | `30 22 * * *` | 04:00 AM |
+| 4 | `30 23 * * *` | 05:00 AM |
+
+Each run checks for an existing open, non-draft PR before picking an issue — if the 2 AM run
+fixes issue #10, the 3 AM run automatically skips #10 and picks the next one. If a run
+produces only a draft PR (tests pass but production gate fails), the next run retries that
+same issue.
+
+You can also trigger it on demand from **Actions → Nightly Ensemble Fix → Run workflow**,
+with an optional issue number and max iterations override.
 
 > Note: GitHub may delay scheduled runs by a few minutes under load, scheduled
 > workflows only run from the **default branch**, and they auto-disable after ~60 days

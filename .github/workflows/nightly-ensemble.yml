@@ -1,18 +1,23 @@
 name: Nightly Ensemble Fix
 
-# Multi-agent (Claude + Gemini) + judge + test-verified loop.
-# Runs at 02:00 IST (20:30 UTC). This SUPERSEDES nightly-autofix.yml —
-# disable that one if you adopt this (don't run both on the same issue).
+# Multi-agent (Claude + Gemini + Copilot) + synthesis judge + 2-stage quality gate.
+# Runs 4 times a night (IST). Each run picks a DIFFERENT issue:
+#   • Skips any issue that already has a non-draft open PR (= already fixed or in review).
+#   • Only retries an issue if its previous PR was a draft (= tests passed, production gate failed).
+# Disable nightly-autofix.yml if you use this — don't run both on the same repo.
 on:
   schedule:
-    - cron: "30 20 * * *"
+    - cron: "30 20 * * *"   # 02:00 AM IST
+    - cron: "30 21 * * *"   # 03:00 AM IST
+    - cron: "30 22 * * *"   # 04:00 AM IST
+    - cron: "30 23 * * *"   # 05:00 AM IST
   workflow_dispatch:
     inputs:
       issue:
-        description: "Issue number (optional; defaults to oldest open `auto-fix` issue)"
+        description: "Issue number (optional; leave blank to auto-pick)"
         required: false
       max_iters:
-        description: "Max refinement iterations"
+        description: "Max refinement iterations (default 3)"
         required: false
         default: "3"
 
@@ -20,11 +25,11 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  models: read   # Llama/Mistral judge via free GitHub Models
+  models: read   # Free GitHub Models (Llama/ChatGPT/DeepSeek judges)
 
 concurrency:
   group: nightly-ensemble
-  cancel-in-progress: false
+  cancel-in-progress: false  # queue, don't cancel — each run works on a different issue
 
 jobs:
   ensemble:
@@ -40,51 +45,75 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INPUT_ISSUE: ${{ github.event.inputs.issue }}
         run: |
+          # ── Manual override ──────────────────────────────────────────────
           if [ -n "$INPUT_ISSUE" ]; then
             num="$INPUT_ISSUE"
             source="workflow_dispatch"
           else
+            # ── Build ordered candidate list ────────────────────────────────
             # Priority 1: explicit opt-in via 'auto-fix' label
-            num=$(gh issue list --label auto-fix --state open --limit 1 \
-                  --json number --jq '.[0].number // empty')
-            source="auto-fix label"
+            p1=$(gh issue list --label auto-fix --state open --limit 10 \
+                 --json number --jq '.[].number' 2>/dev/null || true)
 
-            # Priority 2: unassigned bug reports (no label needed)
-            if [ -z "$num" ]; then
-              num=$(gh issue list --label bug --state open --json number,assignees --limit 20 \
-                    --jq '[.[] | select(.assignees == [])] | .[0].number // empty')
-              source="bug label (unassigned)"
-            fi
+            # Priority 2: unassigned bug reports
+            p2=$(gh issue list --label bug --state open --json number,assignees --limit 20 \
+                 --jq '[.[] | select(.assignees == [])] | .[].number' 2>/dev/null || true)
 
-            # Priority 3: absolute fallback — pick any oldest open issue
-            if [ -z "$num" ]; then
-              num=$(gh issue list --state open --limit 1 \
-                    --json number --jq '.[0].number // empty')
-              source="oldest open issue (no filter)"
-            fi
+            # Priority 3: any open issue (absolute fallback)
+            p3=$(gh issue list --state open --limit 30 \
+                 --json number --jq '.[].number' 2>/dev/null || true)
+
+            # Combine and deduplicate, preserving priority order.
+            # awk POSIX one-liner: '!seen[$0]++' keeps first occurrence of each line;
+            # '/^[0-9]+$/' filters out blank lines and non-numeric values.
+            # POSIX awk ships on every GitHub Actions runner (Ubuntu) and macOS.
+            all=$(printf '%s\n' $p1 $p2 $p3 | awk '!seen[$0]++ && /^[0-9]+$/')
+
+            num=""
+            source=""
+            for candidate in $all; do
+              # Check for an existing OPEN, NON-DRAFT PR for this issue.
+              # A non-draft PR = already fixed and in review → skip.
+              # A draft PR = tests passed but production gate failed → retry.
+              # No PR at all → work on it.
+              existing_nondraft=$(gh pr list --state open --head "fix/issue-$candidate" \
+                --json isDraft --jq '[.[] | select(.isDraft == false)] | length' \
+                2>/dev/null || echo "0")
+
+              if [ "${existing_nondraft:-0}" -gt 0 ]; then
+                echo "  ⏭  Issue #$candidate — non-draft PR exists, skipping"
+                continue
+              fi
+
+              num="$candidate"
+              if   echo "$p1" | grep -qx "$candidate"; then source="auto-fix label"
+              elif echo "$p2" | grep -qx "$candidate"; then source="bug label (unassigned)"
+              else source="oldest open issue (fallback)"; fi
+              break
+            done
           fi
 
-          # Always print diagnostics so you can see what the bot found
-          total=$(gh issue list --state open --limit 200 --json number --jq 'length')
-          labeled=$(gh issue list --label auto-fix --state open --limit 200 --json number --jq 'length')
-          bugs=$(gh issue list --label bug --state open --json number,assignees --limit 100 \
-                 --jq '[.[] | select(.assignees == [])] | length')
-          echo "=== Diagnostics: $total open issues | $labeled with 'auto-fix' label | $bugs unassigned bugs ==="
+          # ── Diagnostics ──────────────────────────────────────────────────
+          total=$(gh issue list --state open --limit 200 --json number --jq 'length' 2>/dev/null || echo "?")
+          labeled=$(gh issue list --label auto-fix --state open --limit 200 --json number \
+                    --jq 'length' 2>/dev/null || echo "0")
+          open_prs=$(gh pr list --state open --json number --jq 'length' 2>/dev/null || echo "?")
+          echo "=== Diagnostics: $total open issues | $labeled with 'auto-fix' | $open_prs open PRs ==="
 
           if [ -z "$num" ]; then
-            echo "No open issues found — nothing to do."
-            echo "Tip: Label issues with 'auto-fix' to explicitly queue them, or leave bug issues unassigned."
-            echo "none=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "No eligible issues found (all open issues already have non-draft PRs, or no issues exist)."
+            echo "none=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          echo "Selected issue #$num via [$source]"
+          echo "✅ Selected issue #$num via [$source]"
           echo "number=$num" >> "$GITHUB_OUTPUT"
           {
             echo "title<<__EOF__"; gh issue view "$num" --json title --jq .title; echo "__EOF__"
             echo "body<<__EOF__";  gh issue view "$num" --json body  --jq '.body // ""'; echo "__EOF__"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Setup toolchain
+      - name: Setup Flutter
         if: steps.pick.outputs.none != 'true'
         uses: subosito/flutter-action@v2
         with:
@@ -99,20 +128,17 @@ jobs:
 
       - name: Run ensemble fix loop
         if: steps.pick.outputs.none != 'true'
+        timeout-minutes: 90   # hard cap: 3 iters × ~25 min each + overhead
         env:
           ISSUE_NUMBER: ${{ steps.pick.outputs.number }}
-          ISSUE_TITLE: ${{ steps.pick.outputs.title }}
-          ISSUE_BODY: ${{ steps.pick.outputs.body }}
-          MAX_ITERS: ${{ github.event.inputs.max_iters || '3' }}
-          BASE_BRANCH: main
+          ISSUE_TITLE:  ${{ steps.pick.outputs.title }}
+          ISSUE_BODY:   ${{ steps.pick.outputs.body }}
+          MAX_ITERS:    ${{ github.event.inputs.max_iters || '3' }}
+          BASE_BRANCH:  main
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Llama/Mistral/DeepSeek/ChatGPT judges via free GitHub Models (built-in token).
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
           GITHUB_MODELS_TOKEN: ${{ github.token }}
-          # Copilot judge — PAT from your Copilot-enabled GitHub account (can differ from repo owner).
-          COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
-          # Groq judge (optional — free at groq.com, add GROQ_API_KEY secret).
+          COPILOT_PAT:  ${{ secrets.COPILOT_PAT }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          # PAT so the opened PR triggers pr-checks.yml (falls back to built-in token).
-          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          GH_TOKEN:     ${{ secrets.GH_PAT || github.token }}
         run: python3 .github/scripts/ensemble_fix.py
