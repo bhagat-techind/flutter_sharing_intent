@@ -44,7 +44,9 @@ jobs:
         run: |
           today=$(date -u +%Y-%m-%d)
 
-          # Count runs from today that are running or already succeeded
+          # Count runs from today that are running or already succeeded.
+          # --limit 30: covers up to 30 triggers today; practically the limit is 3 so
+          # this is a generous ceiling. Increasing it would slow the API call without benefit.
           count=$(gh run list \
             --repo "$REPO" \
             --workflow="issue-resolver.yml" \

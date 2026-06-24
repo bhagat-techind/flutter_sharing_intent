@@ -63,7 +63,10 @@ jobs:
             p3=$(gh issue list --state open --limit 30 \
                  --json number --jq '.[].number' 2>/dev/null || true)
 
-            # Combine and deduplicate, preserving priority order
+            # Combine and deduplicate, preserving priority order.
+            # awk POSIX one-liner: '!seen[$0]++' keeps first occurrence of each line;
+            # '/^[0-9]+$/' filters out blank lines and non-numeric values.
+            # POSIX awk ships on every GitHub Actions runner (Ubuntu) and macOS.
             all=$(printf '%s\n' $p1 $p2 $p3 | awk '!seen[$0]++ && /^[0-9]+$/')
 
             num=""

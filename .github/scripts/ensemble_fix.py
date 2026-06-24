@@ -105,7 +105,9 @@ def run(cmd, check=False, env=None, capture=True, timeout=None):
         )
     except subprocess.TimeoutExpired:
         print(f"[timeout] Command killed after {timeout}s: {cmd[:80]}", flush=True)
-        return 1, ""
+        # 124 matches the exit code that the Unix `timeout` command uses when it kills a process,
+        # making log scanning consistent regardless of which timeout mechanism triggered.
+        return 124, ""
     out = p.stdout or ""
     if capture:
         print(out, flush=True)
