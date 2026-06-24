@@ -13,6 +13,7 @@ import android.webkit.MimeTypeMap
 import java.io.File
 import java.io.FileOutputStream
 import java.util.*
+import java.util.regex.Pattern
 
 /**
  **  Author - Bhagat Singh
@@ -22,6 +23,8 @@ import java.util.*
  */
 
 object MyFileDirectory {
+
+    private val FILE_NAME = Pattern.compile("^[^/\\\\:*?\"<>|]+$")
 
     /**
      * Get a file path from a Uri. This will get the the path for Storage Access
@@ -107,7 +110,12 @@ object MyFileDirectory {
                     val columnIndex = cursor.getColumnIndexOrThrow(column)
                     val fileName = cursor.getString(columnIndex)
                     Log.i("FileDirectory", "File name: $fileName")
-                    targetFile = File(context.cacheDir, fileName)
+                    val safeName = File(fileName).name
+                    if (safeName.isEmpty()) throw IllegalArgumentException("Invalid file name")
+                    if (safeName.startsWith("/")) throw IllegalArgumentException("Invalid file name")
+                    if (safeName.contains("..")) throw IllegalArgumentException("Invalid file name")
+                    if (!FILE_NAME.matcher(safeName).matches()) throw IllegalArgumentException("Invalid file name")
+                    targetFile = File(context.cacheDir, safeName)
                 }
             } finally {
                 cursor?.close()
