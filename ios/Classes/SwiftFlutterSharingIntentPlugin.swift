@@ -2,7 +2,7 @@ import Flutter
 import Photos
 import UIKit
 
-public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, FlutterPlugin {
+public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, FlutterPlugin, FlutterSceneLifeCycleDelegate {
     static let kMessagesChannel = "\(kAppChannel)/messages"
     static let kEventsChannelMedia = "\(kAppChannel)/events-sharing";
     
@@ -27,6 +27,8 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
 
         registrar.addApplicationDelegate(instance)
+        // addSceneDelegate is part of FlutterPluginRegistrar (requires Flutter >=3.3.0 with UIScene support on iOS 13+)
+        registrar.addSceneDelegate(instance)
         // registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
@@ -118,6 +120,50 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
         return false
     }
     
+    // UIScene lifecycle equivalents — called when the app uses UIScene (iOS 13+)
+
+    // Replaces application(_:didFinishLaunchingWithOptions:) for the UIScene lifecycle.
+    // connectionOptions is non-optional per UIWindowSceneDelegate / FlutterSceneLifeCycleDelegate protocol.
+    public func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) -> Bool {
+        if let urlContext = connectionOptions.urlContexts.first {
+            let url = urlContext.url
+            if hasSameSchemePrefix(url: url) {
+                return handleUrl(url: url, setInitialData: true)
+            }
+            return true
+        }
+        for userActivity in connectionOptions.userActivities {
+            if let url = userActivity.webpageURL {
+                if hasSameSchemePrefix(url: url) {
+                    return handleUrl(url: url, setInitialData: true)
+                }
+                return true
+            }
+        }
+        return true
+    }
+
+    // Replaces application(_:open:options:) for the UIScene lifecycle.
+    public func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
+        if let urlContext = URLContexts.first {
+            let url = urlContext.url
+            if hasSameSchemePrefix(url: url) {
+                return handleUrl(url: url, setInitialData: false)
+            }
+        }
+        return false
+    }
+
+    // Replaces application(_:continue:restorationHandler:) for the UIScene lifecycle.
+    public func scene(_ scene: UIScene, continue userActivity: NSUserActivity) -> Bool {
+        if let url = userActivity.webpageURL {
+            if hasSameSchemePrefix(url: url) {
+                return handleUrl(url: url, setInitialData: true)
+            }
+        }
+        return false
+    }
+
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
            let appGroupId = Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String
            let defaultGroupId = "group.\(Bundle.main.bundleIdentifier!)"
