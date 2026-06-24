@@ -45,8 +45,10 @@ jobs:
           today=$(date -u +%Y-%m-%d)
 
           # Count runs from today that are running or already succeeded.
-          # --limit 30: covers up to 30 triggers today; practically the limit is 3 so
-          # this is a generous ceiling. Increasing it would slow the API call without benefit.
+          # --limit 30: GitHub's API returns runs newest-first. In a worst-case burst
+          # (e.g. 20 issues opened at once), all 20 runs would appear within the first 30
+          # results on the day they were created. 30 is a safe ceiling — raising it would
+          # slow the API call; lowering it risks undercounting during a burst.
           count=$(gh run list \
             --repo "$REPO" \
             --workflow="issue-resolver.yml" \

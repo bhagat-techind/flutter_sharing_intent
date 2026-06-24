@@ -54,7 +54,21 @@ GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
 # Gemini CLI can hang for hours on network issues (observed: 5h 58m).
 # Override via GEMINI_TIMEOUT env var (seconds). Default: 10 minutes.
-GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
+# Example: GEMINI_TIMEOUT=1200 for complex issues, GEMINI_TIMEOUT=120 for fast CI.
+try:
+    GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
+    if GEMINI_TIMEOUT < 60:
+        print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is very low — "
+              "Gemini will almost certainly time out before producing any changes.", flush=True)
+    elif GEMINI_TIMEOUT > 1800:
+        print(f"[config] WARNING: GEMINI_TIMEOUT={GEMINI_TIMEOUT}s is very high — "
+              "a hung Gemini CLI could block this runner for >30 minutes.", flush=True)
+    else:
+        print(f"[config] GEMINI_TIMEOUT={GEMINI_TIMEOUT}s", flush=True)
+except ValueError:
+    print(f"[config] WARNING: GEMINI_TIMEOUT env var is not a valid integer "
+          f"(got: {os.environ.get('GEMINI_TIMEOUT')!r}) — using default 600s.", flush=True)
+    GEMINI_TIMEOUT = 600
 
 # Verified model IDs for models.github.ai (tested 2026-06-18).
 # These 3 were chosen because they are free via GITHUB_TOKEN, represent
@@ -101,13 +115,13 @@ def run(cmd, check=False, env=None, capture=True, timeout=None):
     """
     Run a shell command and return (exit_code, stdout_str).
 
-    timeout — seconds; on expiry the process is killed and (124, "") is returned.
-              124 mirrors the exit code that the Unix `timeout` command uses, so
-              log scanners get a consistent signal regardless of which mechanism
-              fired. Agentic coders (Claude, Gemini) intentionally ignore this
-              return value — they check filesystem state via diff_against_base()
-              after the call, not stdout.
-    check   — if True, sys.exit on non-zero exit code (do not use on timeout-able calls).
+    timeout (optional, int) — seconds; if the process runs longer it is killed
+              and (124, "") is returned. 124 mirrors the exit code that the Unix
+              `timeout` command uses, so log scanners get a consistent signal
+              regardless of which mechanism fired. Agentic coders (Claude, Gemini)
+              intentionally ignore this return value — they check filesystem state
+              via diff_against_base() after the call, not stdout.
+    check   — if True, sys.exit on non-zero exit code (do not set on timeout-able calls).
     """
     print(f"\n$ {cmd}", flush=True)
     try:
@@ -609,18 +623,21 @@ def main():
 
     # Seed the first failure_note with any review feedback from a previous PR review cycle.
     # Set by resolver-rerun.yml after it collects Action Items from AI reviewer comments.
+    # Security note: review_feedback originates from GitHub PR comments. It is only ever
+    # embedded in AI prompt strings that are passed through shell_quote() before being
+    # handed to the shell, so command injection is not possible.
     review_feedback = (os.environ.get("REVIEW_FEEDBACK") or "").strip()
     if review_feedback:
-        # Sanity-check: ignore if it looks like a template placeholder or is too short
+        # Ignore if empty, too short, or a template placeholder (e.g. "No specific action items").
         if len(review_feedback) < 20 or review_feedback.lower().startswith("no specific"):
             review_feedback = ""
 
+    if review_feedback:
+        print(f"[main] Seeding run with review feedback ({len(review_feedback)} chars)")
     failure_note = (
         f"PR REVIEW FEEDBACK — apply ALL of these before anything else:\n{review_feedback}\n"
         if review_feedback else ""
     )
-    if review_feedback:
-        print(f"[main] Seeding run with review feedback ({len(review_feedback)} chars)")
 
     for it in range(1, MAX_ITERS + 1):
         print(f"\n{'='*60}\n ITERATION {it}/{MAX_ITERS}\n{'='*60}")
