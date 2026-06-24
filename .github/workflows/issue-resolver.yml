@@ -44,6 +44,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE_NUM: ${{ github.event.issue.number }}
+          QUEUED_BODY: |
+            ⏰ **Auto-resolver queued for tonight** — the daily limit of 3 immediate resolutions has been reached for today. The **nightly scheduler** (runs at 02:00–05:00 IST) will pick this up automatically.
+
+            No action needed from you.
         run: |
           today=$(date -u +%Y-%m-%d)
 
@@ -67,14 +71,7 @@ jobs:
 
           if [ "${count:-0}" -ge 3 ]; then
             echo "Daily limit (3) reached."
-            gh issue comment "$ISSUE_NUM" \
-              --repo "$REPO" \
-              --body "$(cat <<'MSG'
-⏰ **Auto-resolver queued for tonight** — the daily limit of 3 immediate resolutions has been reached for today. The **nightly scheduler** (runs at 02:00–05:00 IST) will pick this up automatically.
-
-No action needed from you.
-MSG
-)"
+            gh issue comment "$ISSUE_NUM" --repo "$REPO" --body "$QUEUED_BODY"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -101,18 +98,17 @@ MSG
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUM: ${{ github.event.issue.number }}
+          START_BODY: |
+            🤖 **Auto-resolver started** — 3 AI coders are working on this issue right now:
+            - **Coder A**: Claude (Anthropic)
+            - **Coder B**: Gemini (Google)
+            - **Coder C**: GitHub Copilot
+
+            A panel of AI judges will synthesise the best combined solution, run `flutter analyze` + `flutter test`, and open a PR automatically. This usually takes **30–45 minutes**.
+
+            If the fix isn't production-ready after 3 attempts, a **draft PR** will be opened for human review. The AI reviewers will also post feedback comments on the PR.
         run: |
-          gh issue comment "$ISSUE_NUM" --body "$(cat <<'MSG'
-🤖 **Auto-resolver started** — 3 AI coders are working on this issue right now:
-- **Coder A**: Claude (Anthropic)
-- **Coder B**: Gemini (Google)
-- **Coder C**: GitHub Copilot
-
-A panel of AI judges will synthesise the best combined solution, run \`flutter analyze\` + \`flutter test\`, and open a PR automatically. This usually takes **30–45 minutes**.
-
-If the fix isn't production-ready after 3 attempts, a **draft PR** will be opened for human review. The AI reviewers will also post feedback comments on the PR.
-MSG
-)"
+          gh issue comment "$ISSUE_NUM" --body "$START_BODY"
 
       # ── Step 4: Setup environment ─────────────────────────────────────────
       - uses: actions/checkout@v4
@@ -159,11 +155,6 @@ MSG
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUM: ${{ github.event.issue.number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FAIL_BODY: "❌ **Auto-resolver failed** — the ensemble fixer encountered an error before it could open a PR.\n\n[View the Actions log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details. The **nightly scheduler** will retry this issue automatically."
         run: |
-          gh issue comment "$ISSUE_NUM" --body "$(cat <<MSG
-❌ **Auto-resolver failed** — the ensemble fixer encountered an error before it could open a PR.
-
-[View the Actions log]($RUN_URL) for details. The **nightly scheduler** will retry this issue automatically.
-MSG
-)"
+          gh issue comment "$ISSUE_NUM" --body "$FAIL_BODY"
