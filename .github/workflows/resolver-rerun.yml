@@ -37,6 +37,11 @@ permissions:
 jobs:
   rerun:
     runs-on: ubuntu-latest
+    env:
+      # gh uses GH_REPO instead of auto-detecting from git remote.
+      # Without this, all pre-checkout `gh` calls fail with
+      # "fatal: not a git repository" because there is no .git yet.
+      GH_REPO: ${{ github.repository }}
     steps:
       # ── Step 1: Identify the PR ───────────────────────────────────────────
       - name: Identify PR
@@ -103,10 +108,19 @@ jobs:
           echo "=== Feedback to pass to resolver ==="
           cat /tmp/review_feedback.txt || echo "(empty)"
 
+          # Skip the re-run if reviewers raised no concrete action items.
+          # "No specific action items" is the sentinel written by extract_action_items.py
+          # when every reviewer's Action Items section was empty or contained "None".
+          if grep -q "^No specific action items" /tmp/review_feedback.txt 2>/dev/null \
+             || [ ! -s /tmp/review_feedback.txt ]; then
+            echo "No action items found — skipping re-run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # ── Step 4: Get issue details ─────────────────────────────────────────
       - name: Get issue details
         id: issue
-        if: steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUM: ${{ steps.pr.outputs.number }}
@@ -134,7 +148,7 @@ jobs:
 
       # ── Step 5: Post "starting" comment ──────────────────────────────────
       - name: Post start comment
-        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUM: ${{ steps.pr.outputs.number }}
@@ -145,17 +159,17 @@ jobs:
 
       # ── Step 6: Checkout + toolchain ─────────────────────────────────────
       - uses: actions/checkout@v4
-        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         with:
           fetch-depth: 0
 
       - uses: subosito/flutter-action@v2
-        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         with:
           channel: stable
 
       - name: Install AI CLIs
-        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         run: |
           npm install -g @anthropic-ai/claude-code @google/gemini-cli
           claude --version || true
@@ -163,7 +177,7 @@ jobs:
 
       # ── Step 7: Re-run ensemble fixer with review feedback ────────────────
       - name: Re-run ensemble fixer
-        if: steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         timeout-minutes: 90
         env:
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
@@ -185,7 +199,7 @@ jobs:
 
       # ── Step 8: Post result comment ───────────────────────────────────────
       - name: Post result comment
-        if: always() && steps.check.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
+        if: always() && steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUM: ${{ steps.pr.outputs.number }}
