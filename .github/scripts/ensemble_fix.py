@@ -256,8 +256,10 @@ def _coder_claude(prompt):
 
 
 def _coder_gemini(prompt):
+    # timeout 300: Gemini CLI can hang for hours on network issues (observed: 5h 58m).
+    # Cap at 5 minutes; if it times out the diff will be empty and Gemini is skipped.
     run(
-        "gemini -y -p " + shell_quote(prompt),
+        "timeout 300 gemini -y -p " + shell_quote(prompt),
         env={
             "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
             # Required: trust the workspace so Gemini CLI runs non-interactively
