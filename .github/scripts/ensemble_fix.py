@@ -118,7 +118,7 @@ def _check_deps():
 
 # ── Utilities ──────────────────────────────────────────────────────────────
 
-def run(cmd, check=False, env=None, capture=True, timeout=None):
+def run(cmd, check=False, env=None, capture=True, timeout=None, stdin=None):
     """
     Run a shell command and return (exit_code, stdout_str).
 
@@ -128,6 +128,8 @@ def run(cmd, check=False, env=None, capture=True, timeout=None):
               regardless of which mechanism fired. Agentic coders (Claude, Gemini)
               intentionally ignore this return value — they check filesystem state
               via diff_against_base() after the call, not stdout.
+    stdin   (optional, str) — text piped to the process's stdin. Use to avoid
+              writing temp files (e.g. `run("git apply -", stdin=diff_text)`).
     check   — if True, sys.exit on non-zero exit code (do not set on timeout-able calls).
     """
     print(f"\n$ {cmd}", flush=True)
@@ -136,6 +138,8 @@ def run(cmd, check=False, env=None, capture=True, timeout=None):
             cmd, shell=True, text=True,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.STDOUT if capture else None,
+            stdin=subprocess.PIPE if stdin is not None else None,
+            input=stdin,
             env={**os.environ, **(env or {})},
             timeout=timeout,
         )
@@ -383,15 +387,12 @@ def _coder_copilot_apply(prompt, copilot_pat):
         print(f"  Response preview: {response[:300]}")
         return False
 
-    with open("copilot_coder.patch", "w") as fh:
-        fh.write(diff_content)
-
-    rc, out = run("git apply --check copilot_coder.patch")
+    rc, out = run("git apply --check -", stdin=diff_content)
     if rc != 0:
         print(f"[Copilot coder] Patch does not apply cleanly:\n{out}")
         return False
 
-    run("git apply copilot_coder.patch", check=True)
+    run("git apply -", check=True, stdin=diff_content)
     print("[Copilot coder] Patch applied.")
     return True
 
@@ -592,9 +593,7 @@ def apply_synthesis(diffs, base, synthesis_instructions):
         print(f"[synthesis] Base {base} has no diff to apply")
         return False
 
-    with open("synthesis_base.patch", "w") as fh:
-        fh.write(base_diff)
-    rc, _ = run("git apply synthesis_base.patch")
+    rc, _ = run("git apply -", stdin=base_diff)
     if rc != 0:
         print(f"[synthesis] Base {base} patch failed to apply")
         return False
