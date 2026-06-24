@@ -52,6 +52,10 @@ FIX_BRANCH = f"fix/issue-{ISSUE}"
 GITHUB_MODELS_URL = "https://models.github.ai/inference/chat/completions"
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
+# Gemini CLI can hang for hours on network issues (observed: 5h 58m).
+# Override via GEMINI_TIMEOUT env var (seconds). Default: 10 minutes.
+GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "600"))
+
 # Verified model IDs for models.github.ai (tested 2026-06-18).
 # These 3 were chosen because they are free via GITHUB_TOKEN, represent
 # different model families (Meta/OpenAI/DeepSeek) for diverse judgements,
@@ -94,6 +98,17 @@ def _check_deps():
 # ── Utilities ──────────────────────────────────────────────────────────────
 
 def run(cmd, check=False, env=None, capture=True, timeout=None):
+    """
+    Run a shell command and return (exit_code, stdout_str).
+
+    timeout — seconds; on expiry the process is killed and (124, "") is returned.
+              124 mirrors the exit code that the Unix `timeout` command uses, so
+              log scanners get a consistent signal regardless of which mechanism
+              fired. Agentic coders (Claude, Gemini) intentionally ignore this
+              return value — they check filesystem state via diff_against_base()
+              after the call, not stdout.
+    check   — if True, sys.exit on non-zero exit code (do not use on timeout-able calls).
+    """
     print(f"\n$ {cmd}", flush=True)
     try:
         p = subprocess.run(
@@ -105,8 +120,6 @@ def run(cmd, check=False, env=None, capture=True, timeout=None):
         )
     except subprocess.TimeoutExpired:
         print(f"[timeout] Command killed after {timeout}s: {cmd[:80]}", flush=True)
-        # 124 matches the exit code that the Unix `timeout` command uses when it kills a process,
-        # making log scanning consistent regardless of which timeout mechanism triggered.
         return 124, ""
     out = p.stdout or ""
     if capture:
@@ -263,9 +276,10 @@ def _coder_claude(prompt):
 
 
 def _coder_gemini(prompt):
-    # timeout=600: Gemini CLI can hang for hours on network issues (observed: 5h 58m).
-    # Using Python's subprocess timeout so this works on any OS (no shell `timeout` needed).
-    # On expiry the diff will be empty and Gemini is silently skipped.
+    # Return value intentionally ignored — Gemini edits files directly;
+    # filesystem state is captured afterwards via diff_against_base().
+    # On timeout (rc=124) the diff will be empty and Gemini is silently skipped.
+    # Override timeout via GEMINI_TIMEOUT env var (default 600s / 10 min).
     run(
         "gemini -y -p " + shell_quote(prompt),
         env={
@@ -274,7 +288,7 @@ def _coder_gemini(prompt):
             # in CI without prompting for directory approval.
             "GEMINI_CLI_TRUST_WORKSPACE": "true",
         },
-        timeout=600,
+        timeout=GEMINI_TIMEOUT,
     )
 
 
