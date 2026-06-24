@@ -1,0 +1,14 @@
+diff --git a/android/src/main/kotlin/com/techind/flutter_sharing_intent/MyFileDirectory.kt b/android/src/main/kotlin/com/techind/flutter_sharing_intent/MyFileDirectory.kt
+index afa7c2f..e1d6c53 100644
+--- a/android/src/main/kotlin/com/techind/flutter_sharing_intent/MyFileDirectory.kt
++++ b/android/src/main/kotlin/com/techind/flutter_sharing_intent/MyFileDirectory.kt
+@@ -107,7 +107,8 @@ object MyFileDirectory {
+                     val columnIndex = cursor.getColumnIndexOrThrow(column)
+                     val fileName = cursor.getString(columnIndex)
+                     Log.i("FileDirectory", "File name: $fileName")
+-                    targetFile = File(context.cacheDir, fileName)
++                    val safeName = File(fileName).name
++                    targetFile = File(context.cacheDir, safeName)
+                 }
+             } finally {
+                 cursor?.close()
