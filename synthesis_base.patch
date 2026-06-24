@@ -1,0 +1,86 @@
+diff --git a/ios/Classes/SwiftFlutterSharingIntentPlugin.swift b/ios/Classes/SwiftFlutterSharingIntentPlugin.swift
+index c1b7634..51d2938 100644
+--- a/ios/Classes/SwiftFlutterSharingIntentPlugin.swift
++++ b/ios/Classes/SwiftFlutterSharingIntentPlugin.swift
+@@ -2,7 +2,7 @@ import Flutter
+ import Photos
+ import UIKit
+ 
+-public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, FlutterPlugin {
++public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, FlutterPlugin, FlutterSceneLifeCycleDelegate {
+     static let kMessagesChannel = "\(kAppChannel)/messages"
+     static let kEventsChannelMedia = "\(kAppChannel)/events-sharing";
+     
+@@ -27,6 +27,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
+ 
+ 
+         registrar.addApplicationDelegate(instance)
++        registrar.addSceneDelegate(instance)
+         // registrar.addMethodCallDelegate(instance, channel: channel)
+     }
+ 
+@@ -118,6 +119,51 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
+         return false
+     }
+     
++    // UIScene lifecycle equivalents — called when the app uses UIScene (iOS 13+)
++
++    // Replaces application(_:didFinishLaunchingWithOptions:) for the UIScene lifecycle.
++    public func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions?) -> Bool {
++        if let urlContext = connectionOptions?.urlContexts.first {
++            let url = urlContext.url
++            if hasSameSchemePrefix(url: url) {
++                return handleUrl(url: url, setInitialData: true)
++            }
++            return true
++        }
++        if let userActivities = connectionOptions?.userActivities {
++            for userActivity in userActivities {
++                if let url = userActivity.webpageURL {
++                    if hasSameSchemePrefix(url: url) {
++                        return handleUrl(url: url, setInitialData: true)
++                    }
++                    return true
++                }
++            }
++        }
++        return true
++    }
++
++    // Replaces application(_:open:options:) for the UIScene lifecycle.
++    public func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
++        if let urlContext = URLContexts.first {
++            let url = urlContext.url
++            if hasSameSchemePrefix(url: url) {
++                return handleUrl(url: url, setInitialData: false)
++            }
++        }
++        return false
++    }
++
++    // Replaces application(_:continue:restorationHandler:) for the UIScene lifecycle.
++    public func scene(_ scene: UIScene, continue userActivity: NSUserActivity) -> Bool {
++        if let url = userActivity.webpageURL {
++            if hasSameSchemePrefix(url: url) {
++                return handleUrl(url: url, setInitialData: true)
++            }
++        }
++        return false
++    }
++
+     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
+            let appGroupId = Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String
+            let defaultGroupId = "group.\(Bundle.main.bundleIdentifier!)"
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 257e601..19a13e7 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -6,7 +6,7 @@ homepage: https://github.com/bhagat-techind/flutter_sharing_intent
+ environment:
+ #  sdk: '>=3.0.5 <4.0.0'
+   sdk: ">=3.1.2 <4.0.0"
+-  flutter: ">=3.3.0"
++  flutter: ">=3.38.0"
+ 
+ dependencies:
+   flutter:
