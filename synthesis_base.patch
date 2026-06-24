@@ -1,0 +1,41 @@
+diff --git a/ios/Package.swift b/ios/Package.swift
+new file mode 100644
+index 0000000..31f2f59
+--- /dev/null
++++ b/ios/Package.swift
+@@ -0,0 +1,35 @@
++// swift-tools-version: 5.9
++// The swift-tools-version declares the minimum version of Swift required to build this package.
++
++import PackageDescription
++
++let package = Package(
++    name: "flutter_sharing_intent",
++    platforms: [
++        .iOS("12.0"),
++    ],
++    products: [
++        .library(name: "flutter_sharing_intent", targets: ["flutter_sharing_intent"]),
++    ],
++    targets: [
++        .target(
++            name: "flutter_sharing_intent",
++            dependencies: [],
++            path: ".",
++            exclude: [
++                "Assets",
++                "flutter_sharing_intent.podspec",
++                ".gitignore",
++                "Podfile",
++            ],
++            sources: ["Classes"],
++            resources: [
++                .process("Resources/PrivacyInfo.xcprivacy"),
++            ],
++            publicHeadersPath: "Classes",
++            cSettings: [
++                .headerSearchPath("Classes"),
++            ]
++        ),
++    ]
++)
