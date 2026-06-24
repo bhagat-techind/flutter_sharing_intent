@@ -256,10 +256,10 @@ def _coder_claude(prompt):
 
 
 def _coder_gemini(prompt):
-    # timeout 300: Gemini CLI can hang for hours on network issues (observed: 5h 58m).
-    # Cap at 5 minutes; if it times out the diff will be empty and Gemini is skipped.
+    # timeout 1200: Gemini CLI can hang for hours on network issues (observed: 5h 58m).
+    # Cap at 20 minutes; if it times out the diff will be empty and Gemini is skipped.
     run(
-        "timeout 300 gemini -y -p " + shell_quote(prompt),
+        "timeout 1200 gemini -y -p " + shell_quote(prompt),
         env={
             "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
             # Required: trust the workspace so Gemini CLI runs non-interactively
@@ -580,10 +580,19 @@ def apply_synthesis(diffs, base, synthesis_instructions):
 def main():
     _check_deps()
     copilot_pat = os.environ.get("COPILOT_PAT", "")
-    failure_note = ""
     final_log = ""
     final_prod_report = ""
     judge_reason = ""
+
+    # Seed the first failure_note with any review feedback from a previous PR review cycle.
+    # Set by resolver-rerun.yml after it collects Action Items from AI reviewer comments.
+    review_feedback = os.environ.get("REVIEW_FEEDBACK", "").strip()
+    failure_note = (
+        f"PR REVIEW FEEDBACK — apply ALL of these before anything else:\n{review_feedback}\n"
+        if review_feedback else ""
+    )
+    if review_feedback:
+        print(f"[main] Seeding run with review feedback ({len(review_feedback)} chars)")
 
     for it in range(1, MAX_ITERS + 1):
         print(f"\n{'='*60}\n ITERATION {it}/{MAX_ITERS}\n{'='*60}")
