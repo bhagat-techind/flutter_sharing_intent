@@ -27,9 +27,7 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
 
 
         registrar.addApplicationDelegate(instance)
-        // Register as scene-lifecycle delegate so the plugin keeps working
-        // after the host app adopts UIScene (required by Flutter 3.38+ and
-        // upcoming iOS SDKs).
+        // addSceneDelegate is part of FlutterPluginRegistrar (requires Flutter >=3.3.0 with UIScene support on iOS 13+)
         registrar.addSceneDelegate(instance)
         // registrar.addMethodCallDelegate(instance, channel: channel)
     }
@@ -130,22 +128,26 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     // URL/activity has been handled, otherwise FlutterSceneDelegate will forward
     // it to the engine's deep-link channel.
 
-    @available(iOS 13.0, *)
-    public func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions?) -> Bool {
-        guard let connectionOptions = connectionOptions else { return false }
-        if let urlContext = connectionOptions.urlContexts.first,
-           hasSameSchemePrefix(url: urlContext.url) {
-            return handleUrl(url: urlContext.url, setInitialData: true)
-        }
-        for userActivity in connectionOptions.userActivities {
-            if let url = userActivity.webpageURL, hasSameSchemePrefix(url: url) {
+    // connectionOptions is non-optional per FlutterSceneLifeCycleDelegate protocol.
+    public func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) -> Bool {
+        if let urlContext = connectionOptions.urlContexts.first {
+            let url = urlContext.url
+            if hasSameSchemePrefix(url: url) {
                 return handleUrl(url: url, setInitialData: true)
             }
+            return true
         }
-        return false
+        for userActivity in connectionOptions.userActivities {
+            if let url = userActivity.webpageURL {
+                if hasSameSchemePrefix(url: url) {
+                    return handleUrl(url: url, setInitialData: true)
+                }
+                return true
+            }
+        }
+        return true
     }
 
-    @available(iOS 13.0, *)
     public func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
         for urlContext in URLContexts {
             if hasSameSchemePrefix(url: urlContext.url) {
@@ -155,14 +157,13 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
         return false
     }
 
-    @available(iOS 13.0, *)
     public func scene(_ scene: UIScene, continue userActivity: NSUserActivity) -> Bool {
         if let url = userActivity.webpageURL, hasSameSchemePrefix(url: url) {
             return handleUrl(url: url, setInitialData: true)
         }
         return false
     }
-    
+
     private func handleUrl(url: URL?, setInitialData: Bool) -> Bool {
            let appGroupId = Bundle.main.object(forInfoDictionaryKey: kAppGroupIdKey) as? String
            let defaultGroupId = "group.\(Bundle.main.bundleIdentifier!)"
