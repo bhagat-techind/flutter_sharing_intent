@@ -93,14 +93,19 @@ def _check_deps():
 
 # ── Utilities ──────────────────────────────────────────────────────────────
 
-def run(cmd, check=False, env=None, capture=True):
+def run(cmd, check=False, env=None, capture=True, timeout=None):
     print(f"\n$ {cmd}", flush=True)
-    p = subprocess.run(
-        cmd, shell=True, text=True,
-        stdout=subprocess.PIPE if capture else None,
-        stderr=subprocess.STDOUT if capture else None,
-        env={**os.environ, **(env or {})},
-    )
+    try:
+        p = subprocess.run(
+            cmd, shell=True, text=True,
+            stdout=subprocess.PIPE if capture else None,
+            stderr=subprocess.STDOUT if capture else None,
+            env={**os.environ, **(env or {})},
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"[timeout] Command killed after {timeout}s: {cmd[:80]}", flush=True)
+        return 1, ""
     out = p.stdout or ""
     if capture:
         print(out, flush=True)
@@ -256,16 +261,18 @@ def _coder_claude(prompt):
 
 
 def _coder_gemini(prompt):
-    # timeout 1200: Gemini CLI can hang for hours on network issues (observed: 5h 58m).
-    # Cap at 20 minutes; if it times out the diff will be empty and Gemini is skipped.
+    # timeout=600: Gemini CLI can hang for hours on network issues (observed: 5h 58m).
+    # Using Python's subprocess timeout so this works on any OS (no shell `timeout` needed).
+    # On expiry the diff will be empty and Gemini is silently skipped.
     run(
-        "timeout 1200 gemini -y -p " + shell_quote(prompt),
+        "gemini -y -p " + shell_quote(prompt),
         env={
             "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
             # Required: trust the workspace so Gemini CLI runs non-interactively
             # in CI without prompting for directory approval.
             "GEMINI_CLI_TRUST_WORKSPACE": "true",
         },
+        timeout=600,
     )
 
 
@@ -586,7 +593,12 @@ def main():
 
     # Seed the first failure_note with any review feedback from a previous PR review cycle.
     # Set by resolver-rerun.yml after it collects Action Items from AI reviewer comments.
-    review_feedback = os.environ.get("REVIEW_FEEDBACK", "").strip()
+    review_feedback = (os.environ.get("REVIEW_FEEDBACK") or "").strip()
+    if review_feedback:
+        # Sanity-check: ignore if it looks like a template placeholder or is too short
+        if len(review_feedback) < 20 or review_feedback.lower().startswith("no specific"):
+            review_feedback = ""
+
     failure_note = (
         f"PR REVIEW FEEDBACK — apply ALL of these before anything else:\n{review_feedback}\n"
         if review_feedback else ""
