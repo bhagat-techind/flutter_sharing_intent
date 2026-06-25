@@ -31,6 +31,7 @@ import os
 import subprocess
 import sys
 import textwrap
+import time
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -144,34 +145,73 @@ def _call_openai_compat(url, model_id, token, label, diff):
         return None
 
 
+def _get_copilot_session_token(pat):
+    """
+    Exchange a PAT (or GITHUB_TOKEN) for a short-lived Copilot session token.
+    Returns the token string or None on failure.
+
+    GitHub has several token-exchange endpoints depending on account type.
+    We try them in order and return the first success.
+    """
+    candidates = [
+        "https://api.github.com/copilot_internal/v2/token",
+        "https://api.github.com/copilot_internal/token",   # older accounts
+    ]
+    for endpoint in candidates:
+        try:
+            req = urllib.request.Request(
+                endpoint,
+                headers={
+                    "Authorization": f"Bearer {pat}",
+                    "Accept": "application/json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "Editor-Version": "vscode/1.96.0",
+                    "Editor-Plugin-Version": "copilot-chat/0.22.4",
+                    "User-Agent": "GitHubCopilotChat/0.22.4",
+                    "Copilot-Integration-Id": "vscode-chat",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return json.loads(r.read().decode())["token"]
+        except urllib.error.HTTPError as e:
+            code = e.code
+            body = e.read().decode()[:200]
+            if code == 404:
+                # Endpoint doesn't exist for this account type — try next
+                print(f"[Copilot] {endpoint} → 404 (trying next endpoint)", flush=True)
+                continue
+            elif code == 401:
+                print(f"[Copilot] PAT invalid or expired (HTTP 401)", flush=True)
+                return None
+            elif code == 403:
+                print(f"[Copilot] No active Copilot subscription (HTTP 403)", flush=True)
+                return None
+            else:
+                print(f"[Copilot] Token exchange HTTP {code}: {body}", flush=True)
+                return None
+        except Exception as e:
+            print(f"[Copilot] Token exchange error: {e}", flush=True)
+            return None
+    print("[Copilot] All token endpoints returned 404 — account may not support this API", flush=True)
+    return None
+
+
 def _call_copilot(copilot_pat, label, diff):
     """
     GitHub Copilot Chat completions.
     Requires a PAT from a GitHub account with an active Copilot subscription
     (can be a different account from the repo owner — add as COPILOT_PAT secret).
 
-    Uses the same internal API that VSCode Copilot Chat uses. Skips gracefully
-    if the token is wrong or the Copilot subscription is inactive.
+    Falls back to GITHUB_TOKEN if COPILOT_PAT returns 404 (some orgs grant
+    Copilot access to Actions via the built-in token).
     """
-    # Step 1: exchange the PAT for a short-lived Copilot session token
-    try:
-        token_req = urllib.request.Request(
-            "https://api.github.com/copilot_internal/v2/token",
-            headers={
-                "Authorization": f"Bearer {copilot_pat}",
-                "Accept": "application/json",
-                "Editor-Version": "vscode/1.96.0",
-                "Editor-Plugin-Version": "copilot-chat/0.22.4",
-                "User-Agent": "GitHubCopilotChat/0.22.4",
-            },
-        )
-        with urllib.request.urlopen(token_req, timeout=15) as r:
-            session_token = json.loads(r.read().decode())["token"]
-    except urllib.error.HTTPError as e:
-        print(f"[{label}] Could not get Copilot token — HTTP {e.code}: {e.read().decode()[:200]}", flush=True)
-        return None
-    except Exception as e:
-        print(f"[{label}] Could not get Copilot token: {e}", flush=True)
+    # Try COPILOT_PAT first, then GITHUB_TOKEN as fallback
+    for token_source, pat in [("COPILOT_PAT", copilot_pat), ("GITHUB_TOKEN", GH_TOKEN)]:
+        session_token = _get_copilot_session_token(pat)
+        if session_token:
+            print(f"[Copilot] Got session token via {token_source}", flush=True)
+            break
+    else:
         return None
 
     # Step 2: call Copilot Chat completions with the session token
@@ -206,9 +246,17 @@ def _call_copilot(copilot_pat, label, diff):
 
 
 def _call_gemini(api_key, diff):
-    """Gemini REST API — tries 2.0-flash then 1.5-flash."""
+    """
+    Gemini REST API — tries gemini-2.0-flash then gemini-1.5-flash.
+
+    Both models share the same per-minute quota on free tier. If the first
+    model returns 429 (rate limited), we wait 65 seconds before trying the
+    fallback so the rate-limit window resets. Without the delay, both hits
+    land in the same minute and the second 429 is guaranteed.
+    """
     prompt = REVIEW_PROMPT.format(diff=diff)
-    for model in ("gemini-2.0-flash", "gemini-1.5-flash"):
+    models = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    for i, model in enumerate(models):
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent?key={api_key}"
@@ -227,7 +275,13 @@ def _call_gemini(api_key, diff):
             print(f"[Gemini] succeeded with {model}", flush=True)
             return data["candidates"][0]["content"]["parts"][0]["text"]
         except urllib.error.HTTPError as e:
-            print(f"[Gemini/{model}] HTTP {e.code}: {e.read().decode()[:200]}", flush=True)
+            body_text = e.read().decode()[:200]
+            print(f"[Gemini/{model}] HTTP {e.code}: {body_text}", flush=True)
+            if e.code == 429 and i < len(models) - 1:
+                # Rate-limit window is 60 s; wait 65 s so it resets before
+                # the next model attempt (they share the same quota bucket).
+                print(f"[Gemini] Rate limited — waiting 65s before trying {models[i+1]}...", flush=True)
+                time.sleep(65)
         except Exception as e:
             print(f"[Gemini/{model}] error: {e}", flush=True)
     return None
