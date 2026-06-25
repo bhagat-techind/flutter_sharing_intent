@@ -115,6 +115,7 @@ jobs:
         if: steps.limit.outputs.skip != 'true' && steps.verify.outputs.skip != 'true'
         with:
           fetch-depth: 0
+          token: ${{ secrets.GH_PAT || github.token }}
 
       - uses: subosito/flutter-action@v2
         if: steps.limit.outputs.skip != 'true' && steps.verify.outputs.skip != 'true'
