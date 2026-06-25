@@ -301,16 +301,20 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   }
 
   override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-    Log.d(TAG,"onListen ==>> $arguments, $events")
+    Log.d(TAG, "onListen: arguments=$arguments, initialSharing=${initialSharing != null}, latestSharing=${latestSharing != null}")
+    if (events == null) return
     when (arguments) {
-//      "sharing" -> eventSinkSharing = events
       "sharing" -> {
         eventSinkSharing = events
-
-        latestSharing?.let {
-          Log.d(TAG, "Sending cached sharing data onListen: $it")
-          if (eventSinkSharing != null) {
+        // Deliver any sharing data that arrived while no listener was registered,
+        // but only when it is NOT the cold-start intent (initialSharing != null means
+        // the cold-start data is still pending and should be retrieved via
+        // getInitialSharing() to avoid duplicating it here).
+        if (initialSharing == null) {
+          latestSharing?.let {
+            Log.d(TAG, "onListen: sending cached sharing data, latestSharing=$it")
             eventSinkSharing?.success(it.toString())
+            latestSharing = null
           }
         }
       }
