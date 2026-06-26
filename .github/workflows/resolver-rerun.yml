@@ -90,7 +90,16 @@ jobs:
           fi
           echo "rerun_num=$((rerun_count + 1))" >> "$GITHUB_OUTPUT"
 
-      # ── Step 3: Extract Action Items from AI reviewer comments ────────────
+      # ── Step 3: Checkout repo ─────────────────────────────────────────────
+      # Must happen before Step 4 so .github/scripts/extract_action_items.py
+      # is available on the runner's filesystem.
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      # ── Step 4: Extract Action Items from AI reviewer comments ────────────
       - name: Collect review feedback
         id: feedback
         if: steps.check.outputs.skip != 'true'
@@ -117,7 +126,7 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── Step 4: Get issue details ─────────────────────────────────────────
+      # ── Step 5: Get issue details ─────────────────────────────────────────
       - name: Get issue details
         id: issue
         if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true'
@@ -146,7 +155,7 @@ jobs:
             echo "__EOF__"
           } >> "$GITHUB_OUTPUT"
 
-      # ── Step 5: Post "starting" comment ──────────────────────────────────
+      # ── Step 6: Post "starting" comment ──────────────────────────────────
       - name: Post start comment
         if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         env:
@@ -157,13 +166,7 @@ jobs:
           gh pr comment "$PR_NUM" --body \
             "🔄 **Resolver re-run $RERUN_NUM/2 started** — collecting all AI reviewer Action Items and re-running the ensemble fixer with that feedback."
 
-      # ── Step 6: Checkout + toolchain ─────────────────────────────────────
-      - uses: actions/checkout@v4
-        if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GH_PAT || github.token }}
-
+      # ── Step 7: Toolchain ─────────────────────────────────────────────────
       - uses: subosito/flutter-action@v2
         if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         with:
@@ -176,7 +179,7 @@ jobs:
           claude --version || true
           gemini --version || true
 
-      # ── Step 7: Re-run ensemble fixer with review feedback ────────────────
+      # ── Step 8: Re-run ensemble fixer with review feedback ────────────────
       - name: Re-run ensemble fixer
         if: steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         timeout-minutes: 90
@@ -198,7 +201,7 @@ jobs:
           export REVIEW_FEEDBACK="$(cat /tmp/review_feedback.txt 2>/dev/null || true)"
           python3 .github/scripts/ensemble_fix.py
 
-      # ── Step 8: Post result comment ───────────────────────────────────────
+      # ── Step 9: Post result comment ───────────────────────────────────────
       - name: Post result comment
         if: always() && steps.check.outputs.skip != 'true' && steps.feedback.outputs.skip != 'true' && steps.issue.outputs.skip != 'true'
         env:
