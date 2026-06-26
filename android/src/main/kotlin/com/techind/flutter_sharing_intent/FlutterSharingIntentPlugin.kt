@@ -158,9 +158,9 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           JSONArray().put(
             JSONObject()
               .put("value", path)
-              .put("type", type.ordinal)
-              .put("thumbnail", thumbnail)
-              .put("duration", duration)
+              .put("type", type.ordinal as Int)
+              .apply { thumbnail?.let { put("thumbnail", it) } }
+              .apply { duration?.let { put("duration", it) } }
           )
         } else null
       }
@@ -174,9 +174,9 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           val duration = getDuration(path, type)
           return@mapNotNull JSONObject()
             .put("value", path)
-            .put("type", type.ordinal)
-            .put("thumbnail", thumbnail)
-            .put("duration", duration)
+            .put("type", type.ordinal as Int)
+            .apply { thumbnail?.let { put("thumbnail", it) } }
+            .apply { duration?.let { put("duration", it) } }
         }?.toList()
         if (value != null) JSONArray(value) else null
       }
