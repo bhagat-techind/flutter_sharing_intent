@@ -14,9 +14,8 @@ Pod::Spec.new do |s|
   s.author           = { 'techind' => 'techind@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
-  s.public_header_files = 'Classes/**/*.h'
   s.dependency 'Flutter'
-  s.platform = :ios, '12.0'
+  s.ios.deployment_target = '12.0'
 
   # Flutter.framework does not contain a i386 slice.
   s.pod_target_xcconfig = {
