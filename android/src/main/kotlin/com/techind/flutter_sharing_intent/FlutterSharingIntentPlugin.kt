@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import android.webkit.URLUtil
@@ -93,7 +94,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   private fun handleIntent(intent: Intent, initial: Boolean) {
     val intentFlags = intent.getFlags()
     if ((intentFlags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0){
-      Log.w(TAG,"handleIntent ==>> ${intent.action}, ${intent.type}")
+      Log.d(TAG,"handleIntent ==>> ${intent.action}, ${intent.type}")
       when {
         (intent.type?.startsWith("text") != true)
                 && (intent.action == Intent.ACTION_SEND
@@ -103,7 +104,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           val value = getSharingUris(intent)
           if (initial) initialSharing = value
           latestSharing = value
-          Log.w(TAG,"Image/Video : handleIntent ==>> $value")
+          Log.d(TAG,"Image/Video : handleIntent ==>> $value")
           eventSinkSharing?.success(value?.toString())
         }
         (intent.type == null || intent.type?.startsWith("text") == true)
@@ -112,7 +113,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           val value = getSharingText(intent) ?: getSharingUris(intent)
           if (initial) initialSharing = value
           latestSharing = value
-          Log.w(TAG,"text : handleIntent ==>> $value")
+          Log.d(TAG,"text : handleIntent ==>> $value")
 //          Log.w(TAG,"text : handleIntent ==>> ${eventSinkSharing!=null}")
           eventSinkSharing?.success(value?.toString())
 
@@ -125,7 +126,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           )
           if (initial) initialSharing = value
           latestSharing = value
-          Log.w(TAG,"ACTION_VIEW : handleIntent ==>> $value")
+          Log.d(TAG,"ACTION_VIEW : handleIntent ==>> $value")
           eventSinkSharing?.success(value?.toString())
         }
         intent.action == Intent.ACTION_WEB_SEARCH -> {
@@ -136,7 +137,7 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
             )
             if (initial) initialSharing = value
             latestSharing = value
-            Log.w(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> $value")
+            Log.d(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> $value")
             eventSinkSharing?.success(value?.toString())
         }
       }
@@ -148,11 +149,16 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
 
     return when (intent.action) {
       Intent.ACTION_SEND -> {
-        val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+          @Suppress("DEPRECATION")
+          intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+        }
         val path = uri?.let{ MyFileDirectory.getAbsolutePath(applicationContext, it) }
         if (path != null) {
-          val type = getMediaType(path)
-          val thumbnail = getThumbnail(path, type)
+          val type = path?.let { getMediaType(it) }
+          val thumbnail = path?.let { getThumbnail(it, type) }
           val duration = getDuration(path, type)
 
           JSONArray().put(
@@ -165,12 +171,17 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
         } else null
       }
       Intent.ACTION_SEND_MULTIPLE -> {
-        val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+        val uris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+          @Suppress("DEPRECATION")
+          intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+        }
         val value = uris?.mapNotNull { uri ->
           val path = MyFileDirectory.getAbsolutePath(applicationContext, uri)
             ?: return@mapNotNull null
-          val type = getMediaType(path)
-          val thumbnail = getThumbnail(path, type)
+          val type = path?.let { getMediaType(it) }
+          val thumbnail = path?.let { getThumbnail(it, type) }
           val duration = getDuration(path, type)
           return@mapNotNull JSONObject()
             .put("value", path)
