@@ -794,8 +794,26 @@ def open_pr(draft, log, prod_report, note):
         f"--body {shell_quote(body)}"
     )
     if rc != 0:
-        sys.exit(f"[open_pr] gh pr create failed (exit {rc}) — PR was NOT opened.")
-    print("PR opened." if not draft else "DRAFT PR opened — needs human review.")
+        # A PR for this branch may already exist (e.g. resolver re-run on an existing fix PR).
+        # Find it and update the description + draft state rather than failing.
+        _, existing = run(
+            f"gh pr list --head {FIX_BRANCH} --state open --json number "
+            f"--jq '.[0].number // empty'"
+        )
+        pr_num = existing.strip()
+        if not pr_num:
+            sys.exit(f"[open_pr] gh pr create failed (exit {rc}) and no open PR found for "
+                     f"{FIX_BRANCH} — PR was NOT opened.")
+        run(f"gh pr edit {pr_num} --title {pr_title} --body {shell_quote(body)}", check=True)
+        # Sync draft state: resolver re-runs may promote a draft to ready or vice-versa.
+        if draft:
+            run(f"gh pr ready {pr_num} --undo", check=False)   # convert to draft
+        else:
+            run(f"gh pr ready {pr_num}", check=False)           # convert to ready
+        label = "DRAFT PR" if draft else "PR"
+        print(f"{label} #{pr_num} updated (already existed for branch {FIX_BRANCH}).")
+    else:
+        print("PR opened." if not draft else "DRAFT PR opened — needs human review.")
 
 
 if __name__ == "__main__":
