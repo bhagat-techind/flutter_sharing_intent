@@ -317,32 +317,48 @@ def _coder_gemini(prompt):
 
 
 def _get_copilot_token(pat):
-    req = urllib.request.Request(
+    """
+    Exchange a PAT for a short-lived Copilot session token.
+    Tries two endpoints in order — account type determines which one works.
+    """
+    candidates = [
         "https://api.github.com/copilot_internal/v2/token",
-        headers={
-            "Authorization": f"Bearer {pat}",
-            "Accept": "application/json",
-            "Editor-Version": "vscode/1.96.0",
-            "Editor-Plugin-Version": "copilot-chat/0.22.4",
-            "User-Agent": "GitHubCopilotChat/0.22.4",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            return json.loads(r.read().decode())["token"]
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            print("[Copilot] Token exchange failed: COPILOT_PAT is invalid or expired "
-                  "(HTTP 401). Regenerate the classic PAT at github.com/settings/tokens.")
-        elif e.code == 403:
-            print("[Copilot] Token exchange failed: account has no active Copilot "
-                  "subscription (HTTP 403). Check the account that owns COPILOT_PAT.")
-        else:
-            print(f"[Copilot] Token exchange failed: HTTP {e.code} — {e.read().decode()[:200]}")
-        return None
-    except Exception as e:
-        print(f"[Copilot] Token exchange failed: {e}")
-        return None
+        "https://api.github.com/copilot_internal/token",   # older accounts
+    ]
+    for endpoint in candidates:
+        req = urllib.request.Request(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {pat}",
+                "Accept": "application/json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Editor-Version": "vscode/1.96.0",
+                "Editor-Plugin-Version": "copilot-chat/0.22.4",
+                "User-Agent": "GitHubCopilotChat/0.22.4",
+                "Copilot-Integration-Id": "vscode-chat",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return json.loads(r.read().decode())["token"]
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                print(f"[Copilot] {endpoint} → 404 (trying next endpoint)", flush=True)
+                continue
+            elif e.code == 401:
+                print("[Copilot] Token exchange failed: COPILOT_PAT is invalid or expired "
+                      "(HTTP 401). Regenerate the classic PAT at github.com/settings/tokens.")
+            elif e.code == 403:
+                print("[Copilot] Token exchange failed: account has no active Copilot "
+                      "subscription (HTTP 403). Check the account that owns COPILOT_PAT.")
+            else:
+                print(f"[Copilot] Token exchange failed: HTTP {e.code} — {e.read().decode()[:200]}")
+            return None
+        except Exception as e:
+            print(f"[Copilot] Token exchange failed: {e}")
+            return None
+    print("[Copilot] All token endpoints returned 404 — account may not support this API")
+    return None
 
 
 def _coder_copilot_apply(prompt, copilot_pat):
@@ -771,11 +787,14 @@ def open_pr(draft, log, prod_report, note):
     """)
 
     flag = "--draft" if draft else ""
-    run(
+    pr_title = shell_quote(f"fix: issue #{ISSUE} ({TITLE[:55]})")
+    rc, _ = run(
         f"gh pr create --base {BASE} --head {FIX_BRANCH} {flag} "
-        f"--title \"fix: issue #{ISSUE} ({TITLE[:55]})\" "
+        f"--title {pr_title} "
         f"--body {shell_quote(body)}"
     )
+    if rc != 0:
+        sys.exit(f"[open_pr] gh pr create failed (exit {rc}) — PR was NOT opened.")
     print("PR opened." if not draft else "DRAFT PR opened — needs human review.")
 
 
