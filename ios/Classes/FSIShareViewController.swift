@@ -339,20 +339,26 @@ open class FSIShareViewController: SLComposeServiceViewController {
     
     
     private func redirectToHostApp() {
-        // kept for compatibility (RSI style)
         loadIds()
-        //        let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier):share"
         let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier)://dataUrl=\(kUserDefaultsKey)"
-        guard let url = URL(string: raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw) else { completeAndExit(); return }
-        
-        var responder: UIResponder? = self
+        guard let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            log("redirectToHostApp error: addingPercentEncoding failed for \(raw)")
+            completeAndExit()
+            return
+        }
+        guard let url = URL(string: encoded) else { completeAndExit(); return }
+
+        // On iOS 18+ the undocumented openURL: responder-chain hack no longer works
+        // inside Share Extensions because UIApplication is not reachable from the
+        // extension's responder chain. Use the documented NSExtensionContext API instead.
         if #available(iOS 18.0, *) {
-            while responder != nil {
-                if let app = responder as? UIApplication { app.open(url, options: [:], completionHandler: nil) }
-                responder = responder?.next
-            }
+            extensionContext?.open(url, completionHandler: nil)
         } else {
+            // Earlier iOS versions don't expose extensionContext?.open(_:completionHandler:),
+            // so we fall back to walking the responder chain to find an object that
+            // responds to openURL: (typically UIApplication) and invoke it directly.
             let sel = sel_registerName("openURL:")
+            var responder: UIResponder? = self
             while responder != nil {
                 if responder?.responds(to: sel) ?? false { _ = responder?.perform(sel, with: url) }
                 responder = responder?.next
