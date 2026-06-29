@@ -230,8 +230,6 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
       mimeType?.startsWith("image") == true -> MediaType.IMAGE
       mimeType?.startsWith("video") == true -> MediaType.VIDEO
       mimeType?.startsWith("text") == true -> MediaType.TEXT
-      mimeType?.startsWith("url") == true -> MediaType.URL
-      mimeType?.startsWith("web_search") == true -> MediaType.WEB_SEARCH
       else -> MediaType.FILE
     }
   }
