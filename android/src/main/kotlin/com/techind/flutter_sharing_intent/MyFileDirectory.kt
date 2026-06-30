@@ -122,7 +122,7 @@ object MyFileDirectory {
                         else -> "FILE"
                     }
                 }
-                val type = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
+                val type = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType) ?: "bin"
                 targetFile = File(context.cacheDir, "${prefix}_${Date().time}.$type")
             }
 
