@@ -234,8 +234,14 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     
     
     public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-        if (arguments as! String? == "sharing" || arguments as! String? == "text" ) {
+        guard let argument = arguments as? String else {
+            return FlutterError.init(code: "INVALID_ARGUMENT", message: "Invalid argument passed", details: nil);
+        }
+        if (argument == "sharing" || argument == "text") {
             eventSinkMedia = events;
+            if let latestSharing = latestSharing {
+                eventSinkMedia?(toJson(data: latestSharing))
+            }
         } else {
             return FlutterError.init(code: "NO_SUCH_ARGUMENT", message: "No such argument\(String(describing: arguments))", details: nil);
         }
