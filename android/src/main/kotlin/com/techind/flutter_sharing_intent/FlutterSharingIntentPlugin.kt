@@ -101,20 +101,22 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
 
 
           val value = getSharingUris(intent)
-          if (initial) initialSharing = value
+          if (value == null) Log.w(TAG,"Image/Video : handleIntent ==>> value is null, skipping assignment")
+          if (initial && value != null) initialSharing = value
           latestSharing = value
           Log.w(TAG,"Image/Video : handleIntent ==>> $value")
-          eventSinkSharing?.success(value?.toString())
+          eventSinkSharing?.success(value?.toString() ?: "")
         }
         (intent.type == null || intent.type?.startsWith("text") == true)
                 && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing text
 
           val value = getSharingText(intent) ?: getSharingUris(intent)
-          if (initial) initialSharing = value
+          if (value == null) Log.w(TAG,"text : handleIntent ==>> value is null, skipping assignment")
+          if (initial && value != null) initialSharing = value
           latestSharing = value
           Log.w(TAG,"text : handleIntent ==>> $value")
 //          Log.w(TAG,"text : handleIntent ==>> ${eventSinkSharing!=null}")
-          eventSinkSharing?.success(value?.toString())
+          eventSinkSharing?.success(value?.toString() ?: "")
 
         }
         intent.action == Intent.ACTION_VIEW -> { // Opening URL
@@ -123,10 +125,11 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
               .put("value", intent.dataString)
               .put("type", MediaType.URL.ordinal)
           )
-          if (initial) initialSharing = value
+          if (value == null) Log.w(TAG,"ACTION_VIEW : handleIntent ==>> value is null, skipping assignment")
+          if (initial && value != null) initialSharing = value
           latestSharing = value
           Log.w(TAG,"ACTION_VIEW : handleIntent ==>> $value")
-          eventSinkSharing?.success(value?.toString())
+          eventSinkSharing?.success(value?.toString() ?: "")
         }
         intent.action == Intent.ACTION_WEB_SEARCH -> {
             val value = JSONArray().put(
@@ -134,10 +137,11 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
                     .put("value", intent.getStringExtra(SearchManager.QUERY))
                     .put("type", MediaType.WEB_SEARCH.ordinal)
             )
-            if (initial) initialSharing = value
+            if (value == null) Log.w(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> value is null, skipping assignment")
+            if (initial && value != null) initialSharing = value
             latestSharing = value
             Log.w(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> $value")
-            eventSinkSharing?.success(value?.toString())
+            eventSinkSharing?.success(value?.toString() ?: "")
         }
       }
     }
