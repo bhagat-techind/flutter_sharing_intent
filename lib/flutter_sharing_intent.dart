@@ -42,8 +42,9 @@ class FlutterSharingIntent {
   /// stream listener count changes from 0 to 1. Stream deactivation happens
   /// only when stream listener count changes from 1 to 0.
   ///
-  /// If the app was started by a link intent or user activity the stream will
-  /// not emit that initial one - query either the `getInitialMedia` instead.
+  /// If the app was started by a link intent or user activity, the stream
+  /// will also emit that initial value to the first listener (in addition to
+  /// `getInitialSharing`), so it is safe to rely on either API.
   Stream<List<SharedFile>> getMediaStream() {
     if (_streamMedia == null) {
       final stream =

@@ -298,10 +298,11 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
       "sharing" -> {
         eventSinkSharing = events
 
-
         latestSharing?.let {
           Log.d(TAG, "Sending cached sharing data onListen: $it")
-//          eventSinkSharing?.success(it.toString())
+          if (eventSinkSharing != null) {
+            eventSinkSharing?.success(it.toString())
+          }
         }
       }
     }
