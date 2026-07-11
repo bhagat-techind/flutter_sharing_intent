@@ -119,6 +119,9 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           value?.let { eventSinkSharing?.success(it.toString()) }
 
         }
+        // Explicit handler for URL intents — produces MediaType.URL.
+        // getMediaType() never receives this intent type, so its "url" branch
+        // was removed; this is the single authoritative place for URL handling.
         intent.action == Intent.ACTION_VIEW -> { // Opening URL
           val value = JSONArray().put(
             JSONObject()
@@ -131,6 +134,9 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
           Log.w(TAG,"ACTION_VIEW : handleIntent ==>> $value")
           eventSinkSharing?.success(value?.toString() ?: "")
         }
+        // Explicit handler for web-search intents — produces MediaType.WEB_SEARCH.
+        // getMediaType() never receives this intent type, so its "web_search" branch
+        // was removed; this is the single authoritative place for web-search handling.
         intent.action == Intent.ACTION_WEB_SEARCH -> {
             val value = JSONArray().put(
                 JSONObject()
@@ -242,21 +248,22 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
     return if (value == null || !URLUtil.isValidUrl(value)) MediaType.TEXT.ordinal else MediaType.URL.ordinal;
   }
 
-  @VisibleForTesting
-  internal fun getMediaType(path: String?): MediaType {
+  // Called only for files shared via EXTRA_STREAM (not inline text or URL intents).
+  // Text-MIME files (e.g. .txt / "text/plain") are classified as FILE so callers
+  // receive a resolvable path rather than a null text payload; inline text is
+  // handled by getSharingText() and URL/web-search by handleIntent() directly.
+  private fun getMediaType(path: String?): MediaType {
     val mimeType = URLConnection.guessContentTypeFromName(path)
-      ?: run {
-        val ext = path?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() }
-          ?: return MediaType.FILE
-        MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
-          ?: return MediaType.FILE
-      }
+    // NOTE: "url" and "web_search" branches are intentionally absent here.
+    // URLConnection.guessContentTypeFromName() only returns standard MIME-type strings
+    // (e.g. "image/png", "video/mp4", "text/plain") — it never returns "url" or
+    // "web_search" as a prefix.  Those intent types are not file-based and therefore
+    // never reach this function; they are routed to the correct MediaType values
+    // (MediaType.URL and MediaType.WEB_SEARCH) by the explicit branches in
+    // handleIntent() that match Intent.ACTION_VIEW and Intent.ACTION_WEB_SEARCH.
     return when {
-      mimeType.startsWith("image") -> MediaType.IMAGE
-      mimeType.startsWith("video") -> MediaType.VIDEO
-      mimeType.startsWith("text") -> MediaType.TEXT
-      mimeType.startsWith("url") -> MediaType.URL
-      mimeType.startsWith("web_search") -> MediaType.WEB_SEARCH
+      mimeType?.startsWith("image") == true -> MediaType.IMAGE
+      mimeType?.startsWith("video") == true -> MediaType.VIDEO
       else -> MediaType.FILE
     }
   }
