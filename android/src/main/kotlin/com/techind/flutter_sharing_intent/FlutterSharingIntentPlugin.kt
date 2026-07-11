@@ -99,26 +99,24 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
       when {
         (intent.type?.startsWith("text") != true)
                 && (intent.action == Intent.ACTION_SEND
-                || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing images or videos
+                || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing images or videos (with optional caption text)
 
 
-          val value = getSharingUris(intent)
-          if (value == null) Log.w(TAG,"Image/Video : handleIntent ==>> value is null, skipping assignment")
-          if (initial && value != null) initialSharing = value
+          val value = mergeSharingArrays(getSharingUris(intent), getSharingText(intent))
+          if (initial) initialSharing = value
           latestSharing = value
           Log.w(TAG,"Image/Video : handleIntent ==>> $value")
-          eventSinkSharing?.success(value?.toString() ?: "")
+          value?.let { eventSinkSharing?.success(it.toString()) }
         }
         (intent.type == null || intent.type?.startsWith("text") == true)
-                && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing text
+                && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing text (with optional file)
 
-          val value = getSharingText(intent) ?: getSharingUris(intent)
-          if (value == null) Log.w(TAG,"text : handleIntent ==>> value is null, skipping assignment")
-          if (initial && value != null) initialSharing = value
+          val value = mergeSharingArrays(getSharingText(intent), getSharingUris(intent))
+          if (initial) initialSharing = value
           latestSharing = value
           Log.w(TAG,"text : handleIntent ==>> $value")
 //          Log.w(TAG,"text : handleIntent ==>> ${eventSinkSharing!=null}")
-          eventSinkSharing?.success(value?.toString() ?: "")
+          value?.let { eventSinkSharing?.success(it.toString()) }
 
         }
         intent.action == Intent.ACTION_VIEW -> { // Opening URL
@@ -147,6 +145,20 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
         }
       }
     }
+  }
+
+  // Combines multiple sharing arrays (e.g. file uris + caption text) into a single
+  // array instead of one overwriting the other, so apps receive every shared item.
+  private fun mergeSharingArrays(vararg arrays: JSONArray?): JSONArray? {
+    val merged = JSONArray()
+    arrays.forEach { array ->
+      array?.let {
+        for (i in 0 until it.length()) {
+          merged.put(it.get(i))
+        }
+      }
+    }
+    return if (merged.length() > 0) merged else null
   }
 
   private fun getSharingUris(intent: Intent?): JSONArray? {
