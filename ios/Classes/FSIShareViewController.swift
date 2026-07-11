@@ -339,26 +339,28 @@ open class FSIShareViewController: SLComposeServiceViewController {
     
     
     private func redirectToHostApp() {
-        // kept for compatibility (RSI style)
         loadIds()
-        //        let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier):share"
         let raw = "\(kSchemePrefix)-\(hostAppBundleIdentifier)://dataUrl=\(kUserDefaultsKey)"
         guard let url = URL(string: raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw) else { completeAndExit(); return }
-        
-        var responder: UIResponder? = self
-        if #available(iOS 18.0, *) {
-            while responder != nil {
-                if let app = responder as? UIApplication { app.open(url, options: [:], completionHandler: nil) }
-                responder = responder?.next
-            }
-        } else {
-            let sel = sel_registerName("openURL:")
-            while responder != nil {
-                if responder?.responds(to: sel) ?? false { _ = responder?.perform(sel, with: url) }
-                responder = responder?.next
-            }
+
+        // The undocumented responder-chain "openURL:" hack is unreliable on real
+        // devices (extensions don't reliably expose a working UIApplication in
+        // their responder chain), which silently drops the URL and prevents the
+        // host app from ever launching to read the shared data.
+        // NSExtensionContext.open(_:completionHandler:) is the documented API for
+        // extensions to ask the host app to open a URL, so use it unconditionally.
+        guard let context = extensionContext else {
+            log("[ERROR] extensionContext is nil — cannot redirect to host app")
+            completeAndExit()
+            return
         }
-        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+        context.open(url, completionHandler: { [weak self] success in
+            guard let self = self else { return }
+            if !success {
+                self.log("[ERROR] extensionContext.open failed for url: \(url)")
+            }
+            context.completeRequest(returningItems: [], completionHandler: nil)
+        })
     }
     
     // MARK: - File / thumbnail / metadata helpers
