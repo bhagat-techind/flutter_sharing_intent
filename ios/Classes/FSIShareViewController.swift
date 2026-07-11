@@ -385,14 +385,44 @@ open class FSIShareViewController: SLComposeServiceViewController {
     }
     
     func copyFile(at srcURL: URL, to dstURL: URL) -> Bool {
-        do {
-            if FileManager.default.fileExists(atPath: dstURL.path) { try FileManager.default.removeItem(at: dstURL) }
-            try FileManager.default.copyItem(at: srcURL, to: dstURL)
-            return true
-        } catch {
-            log("copyFile error: \(error)")
+        guard srcURL.isFileURL else {
+            log("copyFile error: srcURL is not a file URL: \(srcURL)")
             return false
         }
+        guard dstURL.isFileURL else {
+            log("copyFile error: dstURL is not a file URL: \(dstURL)")
+            return false
+        }
+
+        // Files provided by the Files app (iCloud Drive, third-party file
+        // providers, etc.) are exposed as security-scoped URLs. Without
+        // starting access and coordinating the read, the source file may
+        // not be materialized and copyItem silently produces a 0-byte file.
+        let needsSecurityScope = srcURL.startAccessingSecurityScopedResource()
+        defer {
+            if needsSecurityScope { srcURL.stopAccessingSecurityScopedResource() }
+        }
+
+        var success = false
+        var coordinatorError: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: srcURL, options: [], error: &coordinatorError) { coordinatedURL in
+            guard FileManager.default.fileExists(atPath: coordinatedURL.path) else {
+                log("copyFile error: source file does not exist at coordinated path: \(coordinatedURL.path)")
+                return
+            }
+            do {
+                if FileManager.default.fileExists(atPath: dstURL.path) { try FileManager.default.removeItem(at: dstURL) }
+                try FileManager.default.copyItem(at: coordinatedURL, to: dstURL)
+                success = true
+            } catch {
+                log("copyFile error copying from \(coordinatedURL.path) to \(dstURL.path): \(error)")
+            }
+        }
+        if let coordinatorError = coordinatorError {
+            log("copyFile coordinator error for \(srcURL.path): \(coordinatorError), userInfo: \(coordinatorError.userInfo)")
+            return false
+        }
+        return success
     }
     
     private func getSharedMediaFile(forVideo: URL) -> SharingFile? {
