@@ -21,23 +21,24 @@ class SharedFile {
   /// Post message iOS ONLY
   final String? message;
 
-  SharedFile(
-      {required this.value,
-      this.thumbnail,
-      this.duration,
-      this.type = SharedMediaType.OTHER,
-      this.mimeType,
-      this.message});
+  SharedFile({
+    required this.value,
+    this.thumbnail,
+    this.duration,
+    this.type = SharedMediaType.OTHER,
+    this.mimeType,
+    this.message,
+  });
 
   SharedFile.fromJson(Map<String, dynamic> json)
-      : value = json['value'] ?? json['path'],
-        thumbnail = json['thumbnail'],
-        duration = json['duration'],
-        type = json['type'] is int
-            ? SharedMediaType.values[json['type']]
-            : SharedMediaType.OTHER,
-        mimeType = json['mimeType'],
-        message = json['message'];
+    : value = json['value'] ?? json['path'],
+      thumbnail = json['thumbnail'],
+      duration = json['duration'],
+      type = json['type'] is int
+          ? SharedMediaType.values[json['type']]
+          : SharedMediaType.OTHER,
+      mimeType = json['mimeType'],
+      message = json['message'];
 
   Map<String, dynamic> toMap() {
     return {
