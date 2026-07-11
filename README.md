@@ -417,3 +417,8 @@ class _MyAppState extends State<MyApp> {
 
 * Error: Invalid Bundle. The bundle at 'Runner.app/Plugins/Sharing Extension.appex' contains disallowed file 'Frameworks'
     * Fix: https://stackoverflow.com/a/25789145/2061365
+
+* Error (Xcode): Cycle inside Runner; building could produce unreliable results.
+  * This build cycle is triggered when the `Embed App Extensions` phase runs after `Thin Binary` in the Runner target's Build Phases. Xcode ends up with a circular dependency between copying the `.appex` bundle and stripping/processing binaries.
+  * Fix: In Xcode, open your **Runner** target → **Build Phases** tab. Drag the **Embed Foundation Extensions** (or **Embed App Extensions**) phase so it appears **above** the **Thin Binary** phase. Clean the build folder (`Product → Clean Build Folder`) and rebuild.
+  * Reference: [Flutter issue #135739](https://github.com/flutter/flutter/issues/135739)
