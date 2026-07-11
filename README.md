@@ -314,8 +314,8 @@ class ShareViewController: FSIShareViewController {
 ## Full Example
 
 ```dart
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter_sharing_intent/flutter_sharing_intent.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
 
@@ -333,44 +333,65 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   late StreamSubscription _intentDataStreamSubscription;
   List<SharedFile>? list;
+
   @override
   void initState() {
     super.initState();
-    // For sharing images coming from outside the app while the app is in the memory
-    _intentDataStreamSubscription = FlutterSharingIntent.instance.getMediaStream()
+    // For sharing coming from outside the app while the app is in memory
+    _intentDataStreamSubscription = FlutterSharingIntent.instance
+        .getMediaStream()
         .listen((List<SharedFile> value) {
-      setState(() {
-        list = value;
-      });
-      print("Shared: getMediaStream ${value.map((f) => f.value).join(",")}");
+      setState(() => list = value);
+      _handleSharedFiles(value);
     }, onError: (err) {
       print("getIntentDataStream error: $err");
     });
 
-    // For sharing images coming from outside the app while the app is closed
-    FlutterSharingIntent.instance.getInitialSharing().then((List<SharedFile> value) {
-      print("Shared: getInitialMedia ${value.map((f) => f.value).join(",")}");
-      setState(() {
-        list = value;
-      });
+    // For sharing coming from outside the app while the app is closed
+    FlutterSharingIntent.instance
+        .getInitialSharing()
+        .then((List<SharedFile> value) {
+      setState(() => list = value);
+      _handleSharedFiles(value);
     });
+  }
+
+  // Always check file.type on each individual SharedFile in a loop.
+  // Do NOT compare list.map((f) => f.type) to an enum — that always returns false.
+  void _handleSharedFiles(List<SharedFile> sharedFiles) {
+    for (final file in sharedFiles) {
+      switch (file.type) {
+        case SharedMediaType.URL:
+          print("Shared URL: ${file.value}");
+        case SharedMediaType.TEXT:
+          print("Shared text: ${file.value}");
+        case SharedMediaType.IMAGE:
+          print("Shared image path: ${file.value}");
+        case SharedMediaType.VIDEO:
+          print("Shared video: ${file.value}, thumbnail: ${file.thumbnail}");
+        case SharedMediaType.FILE:
+          print("Shared file: ${file.value}, mimeType: ${file.mimeType}");
+        default:
+          print("Shared other: ${file.value}");
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Plugin example app'),
-        ),
+        appBar: AppBar(title: const Text('Plugin example app')),
         body: Center(
           child: Container(
-              margin: EdgeInsets.symmetric(horizontal: 24),
-              child: Text('Sharing data: \n${list?.join("\n\n")}\n')),
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text('Sharing data: \n${list?.join("\n\n")}\n'),
+          ),
         ),
       ),
     );
   }
+
   @override
   void dispose() {
     _intentDataStreamSubscription.cancel();
@@ -378,6 +399,10 @@ class _MyAppState extends State<MyApp> {
   }
 }
 ```
+
+> **Tip:** Always check `file.type` on each individual `SharedFile` in a loop.
+> Comparing `sharedFiles.map((f) => f.type) == SharedMediaType.URL` compares an
+> `Iterable` to an enum value and always returns `false`.
 
 ## Troubleshooting
 

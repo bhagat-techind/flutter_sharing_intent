@@ -28,34 +28,62 @@ class _MyAppState extends State<MyApp> {
   }
 
   void initSharingListener() {
-    // For sharing images coming from outside the app while the app is in the memory
+    // For sharing coming from outside the app while the app is in memory
     _intentDataStreamSubscription = FlutterSharingIntent.instance
         .getMediaStream()
         .listen((List<SharedFile> value) {
       setState(() {
         list = value;
       });
-      if (kDebugMode) {
-        print(" Shared: getMediaStream ${value.map((f) => f.value).join(",")}");
-      }
+      _handleSharedFiles(value);
     }, onError: (err) {
       if (kDebugMode) {
         print("Shared: getIntentDataStream error: $err");
       }
     });
 
-    // For sharing images coming from outside the app while the app is closed
+    // For sharing coming from outside the app while the app is closed
     FlutterSharingIntent.instance
         .getInitialSharing()
         .then((List<SharedFile> value) {
-      if (kDebugMode) {
-        print(
-            "Shared: getInitialMedia => ${value.map((f) => f.value).join(",")}");
-      }
       setState(() {
         list = value;
       });
+      _handleSharedFiles(value);
     });
+  }
+
+  void _handleSharedFiles(List<SharedFile> sharedFiles) {
+    for (final file in sharedFiles) {
+      switch (file.type) {
+        case SharedMediaType.URL:
+          if (kDebugMode) {
+            print("Shared URL: ${file.value}");
+          }
+        case SharedMediaType.TEXT:
+          if (kDebugMode) {
+            print("Shared text: ${file.value}");
+          }
+        case SharedMediaType.IMAGE:
+          if (kDebugMode) {
+            print("Shared image path: ${file.value}");
+          }
+        case SharedMediaType.VIDEO:
+          if (kDebugMode) {
+            print(
+                "Shared video path: ${file.value}, thumbnail: ${file.thumbnail}");
+          }
+        case SharedMediaType.FILE:
+          if (kDebugMode) {
+            print(
+                "Shared file path: ${file.value}, mimeType: ${file.mimeType}");
+          }
+        default:
+          if (kDebugMode) {
+            print("Shared other: ${file.value}");
+          }
+      }
+    }
   }
 
   @override
