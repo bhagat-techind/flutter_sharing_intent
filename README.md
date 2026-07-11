@@ -127,6 +127,16 @@ Add the following intent filters to your [android/app/src/main/AndroidManifest.x
 ....
 ```
 
+> **Note:** `android:launchMode="singleTask"` is required on your `MainActivity`. Without it, Android
+> creates a new activity instance for each share intent instead of routing it to the running app,
+> which means `getMediaStream()` never fires for background shares. If you need a different launch
+> mode for another reason, `singleTop` also works.
+
+> **Tip – Limiting which file types appear in the share sheet:** Each `<intent-filter>` block above
+> registers your app for that MIME type. Remove any filters you don't need and your app will no
+> longer appear in the system share sheet for those types.  For example, to receive only images and
+> videos, keep only the `image/*` and `video/*` filters and remove the others.
+
 ## IOS
 
 #### 1. Create Share Extension
@@ -183,6 +193,11 @@ end
 * Add a new container with the name of your choice. For example `group.MyContainer` in the example project its `group.com.techind.flutterSharingIntentExample`
 * Add User-Defined(`Build Settings -> +`) string `CUSTOM_GROUP_ID` in **BOTH** Targets: `Runner` and `Share Extension` and set value to group id created above. You can use different group ids depends on your flavor schemes
 
+> **Important:** The `CUSTOM_GROUP_ID` value **must be identical** in both the Runner target and the
+> Share Extension target. A mismatch is the most common reason the sharing callback never fires —
+> the extension writes shared data to one App Group container while the plugin reads from a different
+> one. Double-check `Build Settings → User-Defined → CUSTOM_GROUP_ID` in both targets after any
+> rename or flavor change.
 
 ##### Make sure the deployment target for Runner.app and the share extension is the same.
 
@@ -431,3 +446,20 @@ class _MyAppState extends State<MyApp> {
   * This build cycle is triggered when the `Embed App Extensions` phase runs after `Thin Binary` in the Runner target's Build Phases. Xcode ends up with a circular dependency between copying the `.appex` bundle and stripping/processing binaries.
   * Fix: In Xcode, open your **Runner** target → **Build Phases** tab. Drag the **Embed Foundation Extensions** (or **Embed App Extensions**) phase so it appears **above** the **Thin Binary** phase. Clean the build folder (`Product → Clean Build Folder`) and rebuild.
   * Reference: [Flutter issue #135739](https://github.com/flutter/flutter/issues/135739)
+
+* Error (Xcode): `'Flutter/Flutter.h' file not found`
+  * This usually means `use_frameworks!` is missing from your `ios/Podfile`. The plugin requires dynamic frameworks.
+  * Fix: Add `use_frameworks!` inside the `target 'Runner' do` block in your `ios/Podfile` (see the Podfile snippet in the iOS Setup section above), then run `pod install` again.
+
+* iOS: App loads after sharing, but the sharing callback never fires / `getMediaStream()` receives no data
+  * The most common cause is an **App Group ID mismatch** between the Runner target and the Share Extension target.  The Share Extension writes to one group container and the plugin reads from a different one, so the data is never delivered.
+  * Fix: In Xcode, verify that the `CUSTOM_GROUP_ID` User-Defined build setting is set to **exactly the same string** in both the `Runner` target and the `Share Extension` target (Build Settings → User-Defined → CUSTOM_GROUP_ID).  Also confirm both targets have the same App Group enabled under Signing & Capabilities.
+  * Additional check: make sure `AppGroupId` in both `ios/Runner/Info.plist` and `ios/Share Extension/Info.plist` is `$(CUSTOM_GROUP_ID)` (not a hard-coded string that might differ between flavors).
+
+* How do I get the file extension from a shared file?
+  * The `SharedFile.mimeType` field contains the MIME type string (e.g. `"image/jpeg"`, `"application/pdf"`).  Derive the extension from it:
+  ```dart
+  import 'package:mime/mime.dart'; // add mime: ^1.0.0 to pubspec.yaml
+  final ext = extensionFromMime(file.mimeType ?? ''); // e.g. "jpeg", "pdf"
+  ```
+  * Alternatively, use `path` package: `extension(file.value)` returns the extension from the cached file path (e.g. `".jpg"`).  This works for most shared files but may return an empty string for content URIs that were resolved without an extension.
