@@ -14,6 +14,7 @@ import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
 import androidx.annotation.NonNull
 import androidx.annotation.VisibleForTesting
+import java.util.Objects
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -44,6 +45,11 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   /** To store initial & latest value when app is opened from background **/
   private var initialSharing: JSONArray? = null
   private var latestSharing: JSONArray? = null
+
+  // Debounce duplicate intents from Samsung and other OEM launchers that
+  // deliver the same intent more than once within a short window.
+  private var lastIntentHash: Int = 0
+  private var lastIntentTime: Long = 0
 
   /// The MethodChannel that will the communication between Flutter and native Android
   private lateinit var channel : MethodChannel
@@ -94,62 +100,72 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
   }
 
   private fun handleIntent(intent: Intent, initial: Boolean) {
-    val intentFlags = intent.getFlags()
-    if ((intentFlags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0){
-      Log.d(TAG,"handleIntent ==>> ${intent.action}, ${intent.type}")
-      when {
-        (intent.type?.startsWith("text") != true)
-                && (intent.action == Intent.ACTION_SEND
-                || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing images or videos (with optional caption text)
+    val intentFlags = intent.flags
+    if ((intentFlags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
 
+    // Skip duplicate intents delivered within 500ms — seen on Samsung and some other OEM devices.
+    val extraStream = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.toString()
+    val intentHash = Objects.hash(intent.action, intent.type, intent.dataString,
+        intent.getStringExtra(Intent.EXTRA_TEXT), extraStream)
+    val now = System.currentTimeMillis()
+    if (intentHash == lastIntentHash && (now - lastIntentTime) < 500L) {
+      Log.d(TAG, "handleIntent: duplicate intent ignored (hash=$intentHash)")
+      return
+    }
+    lastIntentHash = intentHash
+    lastIntentTime = now
 
-          val value = mergeSharingArrays(getSharingUris(intent), getSharingText(intent))
-          if (initial) initialSharing = value
-          latestSharing = value
-          Log.d(TAG,"Image/Video : handleIntent ==>> $value")
-          eventSinkSharing?.success(value?.toString())
-        }
-        (intent.type == null || intent.type?.startsWith("text") == true)
-                && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing text (with optional file)
+    Log.d(TAG,"handleIntent ==>> ${intent.action}, ${intent.type}")
+    when {
+      (intent.type?.startsWith("text") != true)
+              && (intent.action == Intent.ACTION_SEND
+              || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing images or videos (with optional caption text)
 
-          val value = mergeSharingArrays(getSharingText(intent), getSharingUris(intent))
-          if (initial) initialSharing = value
-          latestSharing = value
-          Log.d(TAG,"text : handleIntent ==>> $value")
-//          Log.w(TAG,"text : handleIntent ==>> ${eventSinkSharing!=null}")
-          value?.let { eventSinkSharing?.success(it.toString()) }
+        val value = mergeSharingArrays(getSharingUris(intent), getSharingText(intent))
+        if (initial) initialSharing = value
+        latestSharing = value
+        Log.d(TAG,"Image/Video : handleIntent ==>> $value")
+        eventSinkSharing?.success(value?.toString())
+      }
+      (intent.type == null || intent.type?.startsWith("text") == true)
+              && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing text (with optional file)
 
-        }
-        // Explicit handler for URL intents — produces MediaType.URL.
-        // getMediaType() never receives this intent type, so its "url" branch
-        // was removed; this is the single authoritative place for URL handling.
-        intent.action == Intent.ACTION_VIEW -> { // Opening URL
-          val value = JSONArray().put(
-            JSONObject()
-              .put("value", intent.dataString)
-              .put("type", MediaType.URL.ordinal)
-          )
-          if (value == null) Log.w(TAG,"ACTION_VIEW : handleIntent ==>> value is null, skipping assignment")
-          if (initial && value != null) initialSharing = value
-          latestSharing = value
-          Log.d(TAG,"ACTION_VIEW : handleIntent ==>> $value")
-          eventSinkSharing?.success(value?.toString())
-        }
-        // Explicit handler for web-search intents — produces MediaType.WEB_SEARCH.
-        // getMediaType() never receives this intent type, so its "web_search" branch
-        // was removed; this is the single authoritative place for web-search handling.
-        intent.action == Intent.ACTION_WEB_SEARCH -> {
-            val value = JSONArray().put(
-                JSONObject()
-                    .put("value", intent.getStringExtra(SearchManager.QUERY))
-                    .put("type", MediaType.WEB_SEARCH.ordinal)
-            )
-            if (value == null) Log.w(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> value is null, skipping assignment")
-            if (initial && value != null) initialSharing = value
-            latestSharing = value
-            Log.d(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> $value")
-            eventSinkSharing?.success(value?.toString())
-        }
+        val value = mergeSharingArrays(getSharingText(intent), getSharingUris(intent))
+        if (initial) initialSharing = value
+        latestSharing = value
+        Log.d(TAG,"text : handleIntent ==>> $value")
+        value?.let { eventSinkSharing?.success(it.toString()) }
+
+      }
+      // Explicit handler for URL intents — produces MediaType.URL.
+      // getMediaType() never receives this intent type, so its "url" branch
+      // was removed; this is the single authoritative place for URL handling.
+      intent.action == Intent.ACTION_VIEW -> { // Opening URL
+        val value = JSONArray().put(
+          JSONObject()
+            .put("value", intent.dataString)
+            .put("type", MediaType.URL.ordinal)
+        )
+        if (value == null) Log.w(TAG,"ACTION_VIEW : handleIntent ==>> value is null, skipping assignment")
+        if (initial && value != null) initialSharing = value
+        latestSharing = value
+        Log.d(TAG,"ACTION_VIEW : handleIntent ==>> $value")
+        eventSinkSharing?.success(value?.toString())
+      }
+      // Explicit handler for web-search intents — produces MediaType.WEB_SEARCH.
+      // getMediaType() never receives this intent type, so its "web_search" branch
+      // was removed; this is the single authoritative place for web-search handling.
+      intent.action == Intent.ACTION_WEB_SEARCH -> {
+        val value = JSONArray().put(
+          JSONObject()
+            .put("value", intent.getStringExtra(SearchManager.QUERY))
+            .put("type", MediaType.WEB_SEARCH.ordinal)
+        )
+        if (value == null) Log.w(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> value is null, skipping assignment")
+        if (initial && value != null) initialSharing = value
+        latestSharing = value
+        Log.d(TAG,"ACTION_WEB_SEARCH : handleIntent ==>> $value")
+        eventSinkSharing?.success(value?.toString())
       }
     }
   }
