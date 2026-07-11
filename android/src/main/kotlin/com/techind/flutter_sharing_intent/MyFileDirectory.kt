@@ -110,12 +110,15 @@ object MyFileDirectory {
                     val columnIndex = cursor.getColumnIndexOrThrow(column)
                     val fileName = cursor.getString(columnIndex)
                     Log.i("FileDirectory", "File name: $fileName")
-                    val safeName = File(fileName).name
-                    if (safeName.isEmpty()) throw IllegalArgumentException("Invalid file name")
-                    if (safeName.startsWith("/")) throw IllegalArgumentException("Invalid file name")
-                    if (safeName.contains("..")) throw IllegalArgumentException("Invalid file name")
-                    if (!FILE_NAME.matcher(safeName).matches()) throw IllegalArgumentException("Invalid file name")
-                    targetFile = File(context.cacheDir, safeName)
+                    // fileName can be null for MMS/messaging providers — fall through to
+                    // the MIME-type-based filename generated below when that happens.
+                    if (fileName != null) {
+                        val safeName = File(fileName).name
+                        if (safeName.isNotEmpty() && !safeName.startsWith("/")
+                                && !safeName.contains("..") && FILE_NAME.matcher(safeName).matches()) {
+                            targetFile = File(context.cacheDir, safeName)
+                        }
+                    }
                 }
             } finally {
                 cursor?.close()

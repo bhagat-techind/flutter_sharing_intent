@@ -14,13 +14,15 @@ class MethodChannelFlutterSharingIntent extends FlutterSharingIntentPlatform {
   final methodChannel = const MethodChannel('flutter_sharing_intent');
 
   @visibleForTesting
-  final eventChannel =
-      const EventChannel('flutter_sharing_intent/events-sharing');
+  final eventChannel = const EventChannel(
+    'flutter_sharing_intent/events-sharing',
+  );
 
   @override
   Future<String?> getPlatformVersion() async {
-    final version =
-        await methodChannel.invokeMethod<String>('getPlatformVersion');
+    final version = await methodChannel.invokeMethod<String>(
+      'getPlatformVersion',
+    );
     return version;
   }
 
@@ -41,8 +43,9 @@ class MethodChannelFlutterSharingIntent extends FlutterSharingIntentPlatform {
 
   @override
   Stream<List<SharedFile>> getMediaStream() {
-    final stream =
-        eventChannel.receiveBroadcastStream("sharing").cast<String?>();
+    final stream = eventChannel
+        .receiveBroadcastStream("sharing")
+        .cast<String?>();
     return stream.transform<List<SharedFile>>(
       StreamTransformer<String?, List<SharedFile>>.fromHandlers(
         handleData: (String? data, EventSink<List<SharedFile>> sink) {
@@ -50,9 +53,11 @@ class MethodChannelFlutterSharingIntent extends FlutterSharingIntentPlatform {
             sink.add([]);
           } else {
             final encoded = jsonDecode(data);
-            sink.add(encoded
-                .map<SharedFile>((file) => SharedFile.fromJson(file))
-                .toList());
+            sink.add(
+              encoded
+                  .map<SharedFile>((file) => SharedFile.fromJson(file))
+                  .toList(),
+            );
           }
         },
       ),

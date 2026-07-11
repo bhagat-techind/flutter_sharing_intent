@@ -13,8 +13,9 @@ class MockFlutterSharingIntentPlatform
 
   @override
   Future<List<SharedFile>> getInitialSharing() {
-    return Future.value(
-        [SharedFile(value: "Test", type: SharedMediaType.TEXT)]);
+    return Future.value([
+      SharedFile(value: "Test", type: SharedMediaType.TEXT),
+    ]);
   }
 
   @override
