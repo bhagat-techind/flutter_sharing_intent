@@ -19,6 +19,9 @@ class MockFlutterSharingIntentPlatform
 
   @override
   void reset() {}
+
+  @override
+  Stream<List<SharedFile>> getMediaStream() => Stream.value([]);
 }
 
 void main() {

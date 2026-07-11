@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,10 @@ class MethodChannelFlutterSharingIntent extends FlutterSharingIntentPlatform {
   /// The method channel used to interact with the native platform.
   @visibleForTesting
   final methodChannel = const MethodChannel('flutter_sharing_intent');
+
+  @visibleForTesting
+  final eventChannel =
+      const EventChannel('flutter_sharing_intent/events-sharing');
 
   @override
   Future<String?> getPlatformVersion() async {
@@ -32,5 +37,25 @@ class MethodChannelFlutterSharingIntent extends FlutterSharingIntentPlatform {
     return encoded
         .map<SharedFile>((file) => SharedFile.fromJson(file))
         .toList();
+  }
+
+  @override
+  Stream<List<SharedFile>> getMediaStream() {
+    final stream =
+        eventChannel.receiveBroadcastStream("sharing").cast<String?>();
+    return stream.transform<List<SharedFile>>(
+      StreamTransformer<String?, List<SharedFile>>.fromHandlers(
+        handleData: (String? data, EventSink<List<SharedFile>> sink) {
+          if (data == null) {
+            sink.add([]);
+          } else {
+            final encoded = jsonDecode(data);
+            sink.add(encoded
+                .map<SharedFile>((file) => SharedFile.fromJson(file))
+                .toList());
+          }
+        },
+      ),
+    );
   }
 }
