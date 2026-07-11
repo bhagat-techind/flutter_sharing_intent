@@ -311,6 +311,15 @@ class ShareViewController: FSIShareViewController {
     ....
 ```
 
+#### 8. UIScene lifecycle (Flutter 3.38+)
+
+The plugin auto-registers as a `FlutterSceneLifeCycleDelegate` — share URLs keep working under UIScene.
+
+If your host app adopts `UIApplicationSceneManifest`:
+
+- Move `GeneratedPluginRegistrant.register(...)` from `application:didFinishLaunchingWithOptions:` into `didInitializeImplicitFlutterEngine` (see [docs.flutter.dev/to/uiscene-migration](https://docs.flutter.dev/to/uiscene-migration)).
+- If your router still receives `SharingMedia-<bundle>://...` URLs, filter that scheme in its redirect — payload is already delivered via `getInitialSharing` / `getMediaStream`.
+
 ## Full Example
 
 ```dart
