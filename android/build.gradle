@@ -1,14 +1,14 @@
-group 'com.techind.flutter_sharing_intent'
-version '1.0-SNAPSHOT'
-
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
 }
 
+group 'com.techind.flutter_sharing_intent'
+version '1.0-SNAPSHOT'
+
 android {
     namespace 'com.techind.flutter_sharing_intent'
-    compileSdkVersion 36
+    compileSdk 36
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -25,7 +25,7 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion 21
+        minSdk 21
     }
 }
 

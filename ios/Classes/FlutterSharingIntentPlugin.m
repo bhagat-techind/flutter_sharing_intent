@@ -1,4 +1,5 @@
 #import "FlutterSharingIntentPlugin.h"
+#import <Flutter/Flutter.h>
 #if __has_include(<flutter_sharing_intent/flutter_sharing_intent-Swift.h>)
 #import <flutter_sharing_intent/flutter_sharing_intent-Swift.h>
 #else

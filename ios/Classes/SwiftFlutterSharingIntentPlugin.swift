@@ -128,8 +128,10 @@ public class SwiftFlutterSharingIntentPlugin: NSObject, FlutterStreamHandler, Fl
     // URL/activity has been handled, otherwise FlutterSceneDelegate will forward
     // it to the engine's deep-link channel.
 
-    // connectionOptions is non-optional per FlutterSceneLifeCycleDelegate protocol.
-    public func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) -> Bool {
+    // connectionOptions is nullable per FlutterSceneLifeCycleDelegate protocol (another plugin
+    // may have already consumed it, in which case it arrives as nil).
+    public func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions?) -> Bool {
+        guard let connectionOptions = connectionOptions else { return false }
         if let urlContext = connectionOptions.urlContexts.first {
             let url = urlContext.url
             if hasSameSchemePrefix(url: url) {
