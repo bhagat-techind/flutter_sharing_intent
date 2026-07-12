@@ -44,4 +44,35 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end
+
+  # Workaround: Xcode 16 explicit module scanner pre-scans all module
+  # dependencies before build phases run. flutter_additional_ios_build_settings
+  # adds FRAMEWORK_SEARCH_PATHS as sdk-conditionals ([sdk=iphonesimulator*]),
+  # but the scanner ignores sdk-conditionals, so it can't find Flutter when it
+  # scans flutter_sharing_intent-Swift.h's "@import Flutter".
+  #
+  # The scanner runs in the context of the APP target (Runner, Share Extension),
+  # using THAT target's build settings from Runner.xcodeproj. Those settings
+  # come from Pods-Runner.xcconfig (the xcconfig bridge between Pods and Runner).
+  # We patch those xcconfig files directly to add unconditional Flutter paths,
+  # because xcconfig is the only channel that flows settings from Pods install
+  # into the app target's build environment.
+  engine_dir = File.join(flutter_root, 'bin', 'cache', 'artifacts', 'engine', 'ios', 'Flutter.xcframework')
+  flutter_sim_path = File.join(engine_dir, 'ios-arm64_x86_64-simulator')
+  flutter_device_path = File.join(engine_dir, 'ios-arm64')
+  flutter_unconditional = "\"#{flutter_sim_path}\" \"#{flutter_device_path}\""
+
+  support_files_root = installer.sandbox.target_support_files_root.to_s
+  Dir.glob(File.join(support_files_root, 'Pods-*', 'Pods-*.xcconfig')).each do |xcconfig_path|
+    content = File.read(xcconfig_path)
+    if content =~ /^FRAMEWORK_SEARCH_PATHS\s*=/
+      content.sub!(
+        /^(FRAMEWORK_SEARCH_PATHS\s*=\s*)(.*)$/,
+        "\\1#{flutter_unconditional} \\2"
+      )
+    else
+      content << "\nFRAMEWORK_SEARCH_PATHS = #{flutter_unconditional} $(inherited)"
+    end
+    File.write(xcconfig_path, content)
+  end
 end

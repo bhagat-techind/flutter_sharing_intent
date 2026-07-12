@@ -17,14 +17,24 @@ Pod::Spec.new do |s|
   s.dependency 'Flutter'
   s.ios.deployment_target = '12.0'
 
-  # Flutter.framework does not contain a i386 slice.
+  # Xcode 16 explicit module scanner pre-scans all dependencies before build
+  # phases run. The auto-generated flutter_sharing_intent-Swift.h contains
+  # `@import Flutter` under #if __has_feature(objc_modules), which triggers
+  # the scanner to look for Flutter.framework. Flutter's FRAMEWORK_SEARCH_PATHS
+  # are SDK-conditional (set by flutter_additional_ios_build_settings), but the
+  # scanner ignores sdk-conditionals, so Flutter is never found.
+  # Disabling CLANG_ENABLE_EXPLICIT_MODULES on both the pod target and consumer
+  # target falls back to the traditional implicit-module path that does not have
+  # this pre-scan timing issue.
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'BUILD_LIBRARY_FOR_DISTRIBUTION' => 'YES'
-#     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386'
+    'CLANG_ENABLE_EXPLICIT_MODULES' => 'NO',
+    'SWIFT_EXPLICIT_MODULES_ENABLED' => 'NO',
   }
 
-  s.static_framework = true
+  s.user_target_xcconfig = {
+    'CLANG_ENABLE_EXPLICIT_MODULES' => 'NO'
+  }
 
   # Add resource bundle for Apple manifest policy
   s.resource_bundle = {
