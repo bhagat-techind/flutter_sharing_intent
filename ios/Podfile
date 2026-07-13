@@ -1,8 +1,7 @@
 platform :ios, '12.0'
 
-target 'Runner' do
-  # ... existing pods
-
-  # Add the pod for the external library
-  pod 'Evergage', '1.4.0'
+# This Podfile is used only for `pod lib lint`. Consumer apps use
+# example/ios/Podfile instead.
+target 'flutter_sharing_intent' do
+  use_frameworks!
 end

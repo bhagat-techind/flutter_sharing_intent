@@ -31,6 +31,12 @@ let package = Package(
             publicHeadersPath: "Classes",
             cSettings: [
                 .headerSearchPath("Classes"),
+            ],
+            swiftSettings: [
+                // Xcode 16 defaults to Swift 6 strict concurrency — opt into
+                // Swift 5 mode so existing completion-handler and DispatchSemaphore
+                // patterns don't trigger concurrency errors.
+                .swiftLanguageVersion(.v5),
             ]
         ),
     ]
