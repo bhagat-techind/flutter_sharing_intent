@@ -10,10 +10,10 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
+import android.util.Size
 import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
 import androidx.annotation.NonNull
-import androidx.annotation.VisibleForTesting
 import java.util.Objects
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -300,8 +300,16 @@ class FlutterSharingIntentPlugin: FlutterPlugin, ActivityAware, MethodCallHandle
 
     val videoFile = File(path)
     val targetFile = File(applicationContext.cacheDir, "${videoFile.name}.png")
-    val bitmap = ThumbnailUtils.createVideoThumbnail(path, MediaStore.Video.Thumbnails.MINI_KIND)
-      ?: return null
+    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      try {
+        ThumbnailUtils.createVideoThumbnail(videoFile, Size(512, 384), null)
+      } catch (e: Exception) {
+        null
+      }
+    } else {
+      @Suppress("DEPRECATION")
+      ThumbnailUtils.createVideoThumbnail(path, MediaStore.Video.Thumbnails.MINI_KIND)
+    } ?: return null
     FileOutputStream(targetFile).use { out ->
       bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
     }

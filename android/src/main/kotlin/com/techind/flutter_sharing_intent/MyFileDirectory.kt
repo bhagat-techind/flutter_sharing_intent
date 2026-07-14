@@ -45,10 +45,12 @@ object MyFileDirectory {
                 val split = docId.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
                 val type = split[0]
 
-                return if ("primary".equals(type, ignoreCase = true)) {
-                    Environment.getExternalStorageDirectory().toString() + "/" + split[1]
+                if ("primary".equals(type, ignoreCase = true)) {
+                    @Suppress("DEPRECATION")
+                    val extDir = Environment.getExternalStorageDirectory()
+                    return extDir.toString() + "/" + split[1]
                 } else {
-                    getDataColumn(context, uri, null, null)
+                    return getDataColumn(context, uri, null, null)
                 }
             } else if (isDownloadsDocument(uri)) {
                 return try {
