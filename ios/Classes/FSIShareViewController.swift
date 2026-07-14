@@ -230,7 +230,7 @@ open class FSIShareViewController: SLComposeServiceViewController {
                     self.saveAndRedirect()
                 }
             } else {
-                print("FSIShare: No shared media → stopping.")
+                self.log("No shared media — stopping.")
                 self.completeAndExit()
             }
         }

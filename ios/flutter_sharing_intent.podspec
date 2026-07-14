@@ -33,7 +33,8 @@ Pod::Spec.new do |s|
   }
 
   s.user_target_xcconfig = {
-    'CLANG_ENABLE_EXPLICIT_MODULES' => 'NO'
+    'CLANG_ENABLE_EXPLICIT_MODULES' => 'NO',
+    'SWIFT_EXPLICIT_MODULES_ENABLED' => 'NO',
   }
 
   # Add resource bundle for Apple manifest policy
